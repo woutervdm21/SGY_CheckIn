@@ -1,0 +1,13 @@
+@* Rendered by AuthorizeRouteView's <NotAuthorized> when an unauthenticated device hits
+   any protected page. Does a full-page navigation (not client-side) to /login, since
+   the interactive circuit for a not-authorized render doesn't have HttpContext access
+   to set the auth cookie itself. *@
+@inject NavigationManager Navigation
+
+@code {
+    protected override void OnInitialized()
+    {
+        var returnUrl = Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery);
+        Navigation.NavigateTo($"/login?returnUrl={returnUrl}", forceLoad: true);
+    }
+}

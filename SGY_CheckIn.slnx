@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SGY.CheckIn/SGY.CheckIn.csproj" />
+  </Folder>
+</Solution>

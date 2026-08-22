@@ -1,0 +1,1085 @@
+/* =========================================================================
+   SGY Check-In — design system
+   Self-hosted variable fonts (no runtime CDN calls — this app runs on a
+   church LAN that may have no internet gateway). Dark, geometric palette
+   that echoes the interlocking-diamond mark in the SG logo. Mobile-first:
+   base rules target phone widths; @media blocks widen the layout up from there.
+   ========================================================================= */
+
+@font-face {
+    font-family: 'Unbounded';
+    font-style: normal;
+    font-weight: 600 900;
+    font-display: swap;
+    src: url(/fonts/Unbounded-Variable.woff2) format('woff2');
+}
+
+@font-face {
+    font-family: 'Manrope';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url(/fonts/Manrope-Variable.woff2) format('woff2');
+}
+
+:root {
+    --font-display: 'Unbounded', 'Century Gothic', system-ui, sans-serif;
+    --font-body: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+    --bg: #0e1015;
+    --bg-elevated: #171a22;
+    --bg-elevated-2: #1f2430;
+    --bg-input: #12141a;
+    --border: #2a2f3d;
+    --border-strong: #3a4152;
+
+    --text: #f4f2ed;
+    --text-muted: #9aa0b4;
+    --text-faint: #656c80;
+
+    /* Matches Solid Ground Church's own brand teal (solidground.co.za) rather than an
+       arbitrary choice, so the app reads as part of the same family as the church's
+       website and signage. */
+    --accent: #00d8d8;
+    --accent-2: #03c0c1;
+    --accent-text: #ffffff;
+    --accent-soft-bg: rgba(0, 216, 216, 0.14);
+
+    --success: #3ddc84;
+    --success-bg: rgba(61, 220, 132, 0.12);
+
+    --warning: #ffb84d;
+    --warning-bg: rgba(255, 184, 77, 0.1);
+
+    --danger: #ff6b6b;
+    --danger-bg: rgba(255, 107, 107, 0.1);
+
+    --radius-sm: 10px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-pill: 999px;
+
+    --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.45);
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+    --space-8: 64px;
+
+    color-scheme: dark;
+}
+
+/* ---------- Reset & base ---------- */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+}
+
+body {
+    background:
+        radial-gradient(ellipse 800px 500px at 12% -10%, rgba(0, 216, 216, 0.09), transparent 60%),
+        radial-gradient(ellipse 700px 600px at 110% 15%, rgba(3, 192, 193, 0.07), transparent 60%),
+        var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin: 0;
+}
+
+a {
+    color: var(--accent);
+}
+
+button {
+    font: inherit;
+    color: inherit;
+}
+
+p {
+    margin: 0 0 var(--space-3);
+}
+
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+h1:focus {
+    outline: none;
+}
+
+/* ---------- Form controls (shared across pages) ---------- */
+
+input[type=text], input[type=tel], input[type=date], input[type=password], select {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 1rem;
+    font-family: var(--font-body);
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    appearance: none;
+}
+
+/* Registration / edit forms: larger, touch-friendly inputs. */
+.field input, .field select {
+    padding: 16px;
+    font-size: 1.1rem;
+    border-radius: var(--radius-md);
+}
+
+select {
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+    background-position: calc(100% - 18px) center, calc(100% - 13px) center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 36px;
+}
+
+input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft-bg);
+}
+
+input.invalid, select.invalid {
+    border-color: var(--danger);
+}
+
+input.valid.modified, select.valid.modified {
+    border-color: var(--success);
+}
+
+.validation-message {
+    color: var(--danger);
+    font-size: 0.82rem;
+    margin: 2px 0 0;
+}
+
+/* ---------- Buttons ---------- */
+
+.checkin-button, .submit-button, .login-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 15px 24px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-text);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 216, 216, 0.25);
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+
+    .checkin-button:hover, .submit-button:hover, .login-submit:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px rgba(0, 216, 216, 0.35);
+    }
+
+    .checkin-button:active, .submit-button:active, .login-submit:active {
+        transform: translateY(0);
+    }
+
+    .checkin-button:disabled, .submit-button:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .checkin-button.secondary {
+        background: var(--bg-elevated-2);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+        box-shadow: none;
+    }
+
+        .checkin-button.secondary:hover {
+            border-color: var(--accent);
+            box-shadow: none;
+        }
+
+.cancel-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 13px 22px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+    transition: border-color .15s, color .15s;
+}
+
+    .cancel-link:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+/* "Register a new youth" — a clear secondary action, not a faint link. */
+.register-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 15px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-strong);
+    color: var(--text);
+    text-decoration: none;
+    font-family: var(--font-display);
+    font-weight: 700;
+    transition: border-color .15s, color .15s, background .15s;
+}
+
+    .register-link:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft-bg);
+    }
+
+.archive-button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-faint);
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+}
+
+    .archive-button:hover {
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+.archive-confirm-button {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid rgba(255, 107, 107, 0.35);
+    padding: 12px 20px;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+    .archive-confirm-button:hover {
+        background: rgba(255, 107, 107, 0.2);
+    }
+
+/* =========================================================================
+   Login
+   ========================================================================= */
+
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+    position: relative;
+    overflow: hidden;
+}
+
+    .login-page::before {
+        content: "";
+        position: absolute;
+        inset: -20%;
+        background-image:
+            repeating-linear-gradient(45deg, transparent 0 38px, rgba(255, 255, 255, 0.025) 38px 40px),
+            repeating-linear-gradient(-45deg, transparent 0 38px, rgba(255, 255, 255, 0.025) 38px 40px);
+        pointer-events: none;
+    }
+
+.login-card {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 400px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-7) var(--space-5) var(--space-6);
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    animation: card-rise 0.6s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.login-logo {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--space-4);
+    animation: logo-glow 3s ease-in-out infinite;
+}
+
+@keyframes logo-glow {
+    0%, 100% {
+        filter: drop-shadow(0 0 14px rgba(0, 216, 216, 0.25));
+    }
+
+    50% {
+        filter: drop-shadow(0 0 26px rgba(0, 216, 216, 0.5));
+    }
+}
+
+@keyframes card-rise {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.login-card h1 {
+    font-size: 1.5rem;
+    margin: 0 0 var(--space-2);
+}
+
+.login-subtitle {
+    color: var(--text-muted);
+    margin: 0 0 var(--space-5);
+    font-size: 0.95rem;
+}
+
+.login-error {
+    background: var(--danger-bg);
+    color: var(--danger);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    margin: 0 0 var(--space-4);
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.login-version {
+    margin: var(--space-5) 0 0;
+    color: var(--text-faint);
+    font-size: 0.75rem;
+}
+
+.login-password-input {
+    text-align: center;
+    letter-spacing: 0.05em;
+    padding: 14px 18px;
+    font-size: 1rem;
+}
+
+/* =========================================================================
+   App shell (header/nav) — everything behind the login gate
+   ========================================================================= */
+
+.app-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+}
+
+.app-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text);
+    margin-right: auto;
+}
+
+.app-logo {
+    width: 26px;
+    height: 26px;
+}
+
+.app-brand span {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.02rem;
+    letter-spacing: -0.01em;
+}
+
+.app-nav {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-elevated-2);
+    padding: 4px;
+    border-radius: var(--radius-pill);
+}
+
+    .app-nav a {
+        padding: 8px 16px;
+        border-radius: var(--radius-pill);
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 0.88rem;
+        font-weight: 600;
+        transition: color .15s, background .15s;
+    }
+
+        .app-nav a:hover {
+            color: var(--text);
+        }
+
+        .app-nav a.active {
+            background: var(--accent);
+            color: var(--accent-text);
+        }
+
+.app-signout button {
+    background: none;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: border-color .15s, color .15s;
+}
+
+    .app-signout button:hover {
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+.app-main {
+    flex: 1;
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: var(--space-5) var(--space-4) var(--space-8);
+}
+
+.app-footer {
+    text-align: center;
+    padding: var(--space-4);
+    color: var(--text-faint);
+    font-size: 0.75rem;
+}
+
+/* =========================================================================
+   Check-in (main) screen
+   ========================================================================= */
+
+.checkin-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.search-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.search-box {
+    padding: 16px 20px;
+    font-size: 1.1rem;
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-md);
+}
+
+    .search-box:focus {
+        box-shadow: 0 0 0 4px var(--accent-soft-bg), var(--shadow-md);
+    }
+
+    .search-box::placeholder {
+        color: var(--text-faint);
+    }
+
+.search-hint {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    padding: 0 var(--space-2);
+}
+
+.result-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: list-rise .25s ease both;
+}
+
+@keyframes list-rise {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.result-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 14px 18px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    color: var(--text);
+    transition: border-color .15s, background .15s, transform .1s;
+}
+
+    .result-row:hover {
+        border-color: var(--border-strong);
+        background: var(--bg-elevated-2);
+    }
+
+    .result-row:active {
+        transform: scale(0.99);
+    }
+
+    .result-row.selected {
+        border-color: var(--accent);
+        background: var(--accent-soft-bg);
+    }
+
+.result-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1rem;
+    flex: 1;
+}
+
+.result-grade {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    background: var(--bg-elevated-2);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+}
+
+.badge-checked-in {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--success);
+    background: var(--success-bg);
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+}
+
+.detail-panel {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    animation: card-rise .3s ease both;
+}
+
+    .detail-panel h2 {
+        font-size: 1.4rem;
+    }
+
+.detail-grade {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+.already-checked-in {
+    background: var(--success-bg);
+    color: var(--success);
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+}
+
+.checkin-button {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.05rem;
+}
+
+.confirmation-toast {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid rgba(61, 220, 132, 0.3);
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    text-align: center;
+    animation: toast-in .3s cubic-bezier(.2,.8,.2,1) both;
+}
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* "Checked in today" — a prominent stat, not a footnote. */
+.today-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-decoration: none;
+    color: var(--text);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    transition: background .15s;
+}
+
+    .today-summary:hover {
+        background: var(--bg-elevated);
+    }
+
+.today-count {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 2.2rem;
+    line-height: 1;
+    color: var(--accent);
+}
+
+.today-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* On larger screens the check-in screen is a centred, scaled-up column rather
+   than a cramped top-left block — the search box, register action, and the
+   day's count all become deliberately prominent. */
+@media (min-width: 760px) {
+    .checkin-page {
+        max-width: 640px;
+        margin: 0 auto;
+        gap: var(--space-6);
+        padding-top: var(--space-5);
+    }
+
+    .search-box {
+        padding: 24px 30px;
+        font-size: 1.5rem;
+    }
+
+    .register-link {
+        padding: 19px;
+        font-size: 1.1rem;
+    }
+
+    .result-row {
+        padding: 18px 22px;
+    }
+
+    .result-name {
+        font-size: 1.2rem;
+    }
+
+    .detail-panel {
+        padding: var(--space-6);
+    }
+
+        .detail-panel h2 {
+            font-size: 1.9rem;
+        }
+
+    .checkin-button {
+        padding: 20px;
+        font-size: 1.2rem;
+    }
+
+    .today-count {
+        font-size: 2.8rem;
+    }
+}
+
+/* =========================================================================
+   Register / Edit youth
+   ========================================================================= */
+
+.register-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    animation: page-in .3s ease both;
+}
+
+@keyframes page-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.register-page h1 {
+    font-size: 1.6rem;
+    margin: 0 0 4px;
+}
+
+.page-subtitle {
+    color: var(--text-muted);
+    margin: 0 0 var(--space-2);
+}
+
+.duplicate-nudge {
+    background: var(--warning-bg);
+    border: 1px solid rgba(255, 184, 77, 0.3);
+    color: var(--warning);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+}
+
+    .duplicate-nudge p {
+        margin: 0 0 6px;
+    }
+
+        .duplicate-nudge p:last-child {
+            margin-bottom: 0;
+        }
+
+    .duplicate-nudge a {
+        color: inherit;
+        text-decoration: underline;
+    }
+
+fieldset {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    background: var(--bg-elevated);
+}
+
+legend {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 0 8px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.field-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.optional {
+    font-weight: 400;
+    color: var(--text-faint);
+}
+
+/* Stacked, full-width action buttons — mobile-first: one tap target per row. */
+.form-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+}
+
+.form-actions > * {
+    width: 100%;
+}
+
+/* The register page's three actions, each a distinct colour tier:
+   Register & Check In = solid teal (primary), Register = teal outline (secondary),
+   Cancel = muted ghost (tertiary). */
+.btn-register-checkin,
+.btn-register,
+.btn-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 17px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.02rem;
+    border-radius: var(--radius-md);
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s, color .15s, border-color .15s;
+}
+
+.btn-register-checkin {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--accent-text);
+    border: none;
+    box-shadow: 0 4px 16px rgba(0, 216, 216, 0.25);
+}
+
+    .btn-register-checkin:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px rgba(0, 216, 216, 0.35);
+    }
+
+.btn-register {
+    background: transparent;
+    color: var(--accent);
+    border: 2px solid var(--accent);
+}
+
+    .btn-register:hover {
+        background: var(--accent-soft-bg);
+    }
+
+.btn-cancel {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    font-weight: 600;
+}
+
+    .btn-cancel:hover {
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+    .btn-register-checkin:disabled,
+    .btn-register:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+.save-confirmation {
+    background: var(--success-bg);
+    color: var(--success);
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+}
+
+.archive-section {
+    border-top: 1px solid var(--border);
+    padding-top: var(--space-4);
+}
+
+.archive-confirm-actions {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+}
+
+/* =========================================================================
+   Admin log
+   ========================================================================= */
+
+.admin-log-page h1 {
+    font-size: 1.6rem;
+    margin: 0 0 var(--space-4);
+}
+
+.date-picker-field {
+    max-width: 220px;
+    margin-bottom: var(--space-4);
+}
+
+.log-count {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin: 0 0 var(--space-3);
+}
+
+.empty-state {
+    color: var(--text-muted);
+    text-align: center;
+    padding: var(--space-6) 0;
+}
+
+.log-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+    .log-table th {
+        text-align: left;
+        padding: 12px 16px;
+        background: var(--bg-elevated-2);
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+    }
+
+    .log-table td {
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+        white-space: nowrap;
+    }
+
+    .log-table tbody tr:hover {
+        background: var(--bg-elevated);
+    }
+
+    .log-table a {
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+        .log-table a:hover {
+            text-decoration: underline;
+        }
+
+/* =========================================================================
+   Framework chrome (Blazor reconnect/error UI) — reskinned to match
+   ========================================================================= */
+
+#blazor-error-ui {
+    color-scheme: dark;
+    background: #2a1414;
+    color: #ffd7d7;
+    border-top: 1px solid var(--danger);
+    bottom: 0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.75rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+    font-family: var(--font-body);
+}
+
+    #blazor-error-ui .reload {
+        color: var(--accent);
+        font-weight: 700;
+        text-decoration: underline;
+        margin-left: 8px;
+    }
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.6rem;
+        color: #ffd7d7;
+    }
+
+.blazor-error-boundary {
+    background: var(--danger-bg);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    color: var(--danger);
+}
+
+    .blazor-error-boundary::after {
+        content: "An error has occurred.";
+    }
+
+/* ---------- Wider viewports ---------- */
+
+@media (min-width: 640px) {
+    .app-main {
+        padding: var(--space-6) var(--space-5) var(--space-8);
+    }
+
+    .login-card {
+        padding: var(--space-8) var(--space-6) var(--space-7);
+    }
+}

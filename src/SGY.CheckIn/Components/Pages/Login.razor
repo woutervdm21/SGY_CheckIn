@@ -1,0 +1,41 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@layout Layout.LoginLayout
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in — SGY Check-In</PageTitle>
+
+<div class="login-card">
+    <img src="sg-logo.avif" alt="SG Youth" class="login-logo" />
+    <h1>SGY Check-In</h1>
+    <p class="login-subtitle">Enter the staff password to continue</p>
+
+    @if (HasError)
+    {
+        <p class="login-error" role="alert">That password isn't right — try again.</p>
+    }
+
+    <form method="post" action="/account/login" class="login-form">
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <input
+            type="password"
+            name="password"
+            placeholder="Staff password"
+            autofocus
+            autocomplete="current-password"
+            class="login-password-input" />
+        <button type="submit" class="login-submit">Sign in</button>
+    </form>
+
+    <p class="login-version">v@(AppInfo.Version)</p>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    private bool HasError => Error == "1";
+}

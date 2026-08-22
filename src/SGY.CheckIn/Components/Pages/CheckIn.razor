@@ -1,0 +1,185 @@
+@page "/"
+@attribute [Authorize]
+@inject YouthService YouthService
+@inject CheckInService CheckInService
+
+<PageTitle>Check In — SGY Check-In</PageTitle>
+
+<div class="checkin-page">
+    <div class="search-panel">
+        <input @ref="searchInputRef"
+               value="@searchTerm"
+               @oninput="OnSearchInput"
+               placeholder="Search by name or surname..."
+               autocomplete="off"
+               autofocus
+               class="search-box"
+               aria-label="Search for a youth" />
+
+        @if (searchTerm.Length > 0 && !isSearching && results.Count == 0)
+        {
+            <p class="search-hint">No one found matching "@searchTerm".</p>
+        }
+
+        @if (results.Count > 0)
+        {
+            <ul class="result-list">
+                @foreach (var y in results)
+                {
+                    <li>
+                        <button type="button"
+                                class="result-row @(selected?.Id == y.Id ? "selected" : "")"
+                                @onclick="() => SelectYouth(y)">
+                            <span class="result-name">@y.FullName</span>
+                            <span class="result-grade">@y.Grade.ToDisplayString()</span>
+                            @if (checkedInTodayIds.Contains(y.Id))
+                            {
+                                <span class="badge-checked-in">Checked in</span>
+                            }
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+
+        <a href="/register" class="register-link">+ Register a new youth</a>
+    </div>
+
+    @if (selected is not null)
+    {
+        <div class="detail-panel">
+            <h2>@selected.FullName</h2>
+            <p class="detail-grade">@selected.Grade.ToDisplayString()</p>
+
+            @if (todayCheckIn is not null)
+            {
+                <p class="already-checked-in">Already checked in today at @FormatLocalTime(todayCheckIn.Timestamp)</p>
+                <button type="button" class="checkin-button secondary" @onclick="DoCheckIn">Check In Again</button>
+            }
+            else
+            {
+                <button type="button" class="checkin-button" @onclick="DoCheckIn">Check In</button>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(confirmationMessage))
+    {
+        <div class="confirmation-toast" role="status">@confirmationMessage</div>
+    }
+
+    <a href="/admin/log" class="today-summary">
+        <span class="today-count">@todayCount</span>
+        <span class="today-label">checked in today</span>
+    </a>
+</div>
+
+@code {
+    private ElementReference searchInputRef;
+    private string searchTerm = "";
+    private List<Youth> results = [];
+    private HashSet<int> checkedInTodayIds = [];
+    private bool isSearching;
+    private CancellationTokenSource? debounceCts;
+
+    private Youth? selected;
+    private CheckInRecord? todayCheckIn;
+    private string? confirmationMessage;
+    private int todayCount;
+    private bool needsFocus = true;
+
+    [SupplyParameterFromQuery(Name = "welcome")]
+    private string? WelcomeName { get; set; }
+
+    [SupplyParameterFromQuery(Name = "added")]
+    private string? AddedName { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        todayCount = await CheckInService.GetTodayCountAsync();
+        if (!string.IsNullOrEmpty(WelcomeName))
+        {
+            confirmationMessage = $"{WelcomeName} registered and checked in!";
+        }
+        else if (!string.IsNullOrEmpty(AddedName))
+        {
+            confirmationMessage = $"{AddedName} registered — not checked in yet.";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (needsFocus)
+        {
+            needsFocus = false;
+            await searchInputRef.FocusAsync();
+        }
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        confirmationMessage = null;
+        debounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        debounceCts = cts;
+
+        if (searchTerm.Length == 0)
+        {
+            results = [];
+            checkedInTodayIds = [];
+            isSearching = false;
+            return;
+        }
+
+        try
+        {
+            isSearching = true;
+            await Task.Delay(250, cts.Token);
+
+            var found = await YouthService.SearchAsync(searchTerm, cts.Token);
+            var checkedIn = found.Count > 0
+                ? await CheckInService.GetTodayCheckedInYouthIdsAsync(cts.Token)
+                : [];
+
+            if (cts.Token.IsCancellationRequested) return;
+
+            results = found;
+            checkedInTodayIds = checkedIn;
+            isSearching = false;
+        }
+        catch (TaskCanceledException)
+        {
+            // expected when the user keeps typing — a newer keystroke superseded this search
+        }
+    }
+
+    private async Task SelectYouth(Youth youth)
+    {
+        selected = youth;
+        confirmationMessage = null;
+        todayCheckIn = await CheckInService.GetTodayCheckInAsync(youth.Id);
+    }
+
+    private async Task DoCheckIn()
+    {
+        if (selected is null)
+        {
+            return;
+        }
+
+        await CheckInService.CheckInAsync(selected.Id);
+        confirmationMessage = $"{selected.FullName} checked in at {FormatLocalTime(DateTime.UtcNow)}";
+        todayCount = await CheckInService.GetTodayCountAsync();
+
+        searchTerm = "";
+        results = [];
+        checkedInTodayIds = [];
+        selected = null;
+        todayCheckIn = null;
+        needsFocus = true;
+    }
+
+    private static string FormatLocalTime(DateTime utc) =>
+        TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local).ToString("h:mm tt");
+}

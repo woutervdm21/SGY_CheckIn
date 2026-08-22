@@ -1,0 +1,20 @@
+# Build output
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+*.user
+
+# SQLite database + write-ahead log (data lives in the Docker volume, never in git)
+*.db
+*.db-shm
+*.db-wal
+
+# Local dev / IDE
+.vs/
+.vscode/
+.idea/
+*.suo
+
+# Scratch
+logo_preview.png

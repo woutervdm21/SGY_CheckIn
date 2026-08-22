@@ -1,0 +1,141 @@
+@page "/admin/youth/{Id:int}/edit"
+@attribute [Authorize]
+@inject YouthService YouthService
+@inject NavigationManager Navigation
+
+<PageTitle>Edit Youth — SGY Check-In</PageTitle>
+
+<div class="register-page">
+    @if (youth is null)
+    {
+        <p class="empty-state">Youth not found.</p>
+    }
+    else
+    {
+        <h1>Edit @youth.FullName</h1>
+
+        @if (saved)
+        {
+            <p class="save-confirmation" role="status">Saved.</p>
+        }
+
+        <EditForm Model="form" OnValidSubmit="HandleValidSubmit" FormName="edit-youth">
+            <DataAnnotationsValidator />
+
+            <fieldset>
+                <legend>Youth details</legend>
+
+                <label class="field">
+                    <span class="field-label">Name</span>
+                    <InputText @bind-Value="form.Name" />
+                    <ValidationMessage For="() => form.Name" />
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Surname</span>
+                    <InputText @bind-Value="form.Surname" />
+                    <ValidationMessage For="() => form.Surname" />
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Cell number</span>
+                    <InputText @bind-Value="form.CellNo" type="tel" />
+                    <ValidationMessage For="() => form.CellNo" />
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Grade</span>
+                    <InputSelect @bind-Value="form.Grade">
+                        <option value="">Select a grade…</option>
+                        @foreach (var grade in Enum.GetValues<Grade>())
+                        {
+                            <option value="@grade">@grade.ToDisplayString()</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => form.Grade" />
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Date of birth</span>
+                    <InputDate @bind-Value="form.DateOfBirth" />
+                    <ValidationMessage For="() => form.DateOfBirth" />
+                </label>
+            </fieldset>
+
+            <fieldset>
+                <legend>Parent / guardian details</legend>
+
+                <label class="field">
+                    <span class="field-label">Parent's name</span>
+                    <InputText @bind-Value="form.ParentName" />
+                    <ValidationMessage For="() => form.ParentName" />
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Parent's surname</span>
+                    <InputText @bind-Value="form.ParentSurname" />
+                    <ValidationMessage For="() => form.ParentSurname" />
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Parent's cell number</span>
+                    <InputText @bind-Value="form.ParentCellNo" type="tel" />
+                    <ValidationMessage For="() => form.ParentCellNo" />
+                </label>
+            </fieldset>
+
+            <div class="form-actions">
+                <a href="/admin/log" class="cancel-link">Back to log</a>
+                <button type="submit" class="submit-button">Save changes</button>
+            </div>
+        </EditForm>
+
+        <div class="archive-section">
+            @if (!confirmingArchive)
+            {
+                <button type="button" class="archive-button" @onclick="() => confirmingArchive = true">
+                    Archive this youth
+                </button>
+            }
+            else
+            {
+                <p>Archiving removes them from search but keeps their check-in history. Are you sure?</p>
+                <div class="archive-confirm-actions">
+                    <button type="button" class="archive-confirm-button" @onclick="DoArchive">Yes, archive</button>
+                    <button type="button" class="cancel-link" @onclick="() => confirmingArchive = false">Cancel</button>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Youth? youth;
+    private YouthFormModel form = new();
+    private bool saved;
+    private bool confirmingArchive;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        youth = await YouthService.GetByIdAsync(Id);
+        if (youth is not null)
+        {
+            form = YouthFormModel.FromYouth(youth);
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        await YouthService.UpdateAsync(Id, form);
+        saved = true;
+    }
+
+    private async Task DoArchive()
+    {
+        await YouthService.ArchiveAsync(Id);
+        Navigation.NavigateTo("/admin/log");
+    }
+}

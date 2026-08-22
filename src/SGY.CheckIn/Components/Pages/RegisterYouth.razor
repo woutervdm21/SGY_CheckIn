@@ -1,0 +1,146 @@
+@page "/register"
+@attribute [Authorize]
+@inject YouthService YouthService
+@inject CheckInService CheckInService
+@inject NavigationManager Navigation
+
+<PageTitle>Register — SGY Check-In</PageTitle>
+
+<div class="register-page">
+    <h1>Register a new youth</h1>
+    <p class="page-subtitle">Use "Register &amp; Check In" if they're here now, or "Register" to just add them.</p>
+
+    @if (similarMatches.Count > 0)
+    {
+        <div class="duplicate-nudge" role="status">
+            <p>
+                Found @(similarMatches.Count == 1 ? "someone" : "some people") with a similar name already registered:
+                <strong>@string.Join(", ", similarMatches.Select(m => $"{m.FullName} ({m.Grade.ToDisplayString()})"))</strong>
+            </p>
+            <p>If that's who you're looking for, <a href="/">search for them instead</a> — no need to register a duplicate.</p>
+        </div>
+    }
+
+    <EditForm Model="form" OnValidSubmit="HandleValidSubmit" FormName="register-youth">
+        <DataAnnotationsValidator />
+
+        <fieldset>
+            <legend>Youth details</legend>
+
+            <label class="field">
+                <span class="field-label">Name</span>
+                <InputText @bind-Value="form.Name" @bind-Value:after="OnNameOrSurnameChanged" type="text" />
+                <ValidationMessage For="() => form.Name" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">Surname</span>
+                <InputText @bind-Value="form.Surname" @bind-Value:after="OnNameOrSurnameChanged" type="text" />
+                <ValidationMessage For="() => form.Surname" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">Cell number</span>
+                <InputText @bind-Value="form.CellNo" type="tel" />
+                <ValidationMessage For="() => form.CellNo" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">Grade</span>
+                <InputSelect @bind-Value="form.Grade">
+                    <option value="">Select a grade…</option>
+                    @foreach (var grade in Enum.GetValues<Grade>())
+                    {
+                        <option value="@grade">@grade.ToDisplayString()</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => form.Grade" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">Date of birth</span>
+                <InputDate @bind-Value="form.DateOfBirth" />
+                <ValidationMessage For="() => form.DateOfBirth" />
+            </label>
+        </fieldset>
+
+        <fieldset>
+            <legend>Parent / guardian details</legend>
+
+            <label class="field">
+                <span class="field-label">Parent's name</span>
+                <InputText @bind-Value="form.ParentName" type="text" />
+                <ValidationMessage For="() => form.ParentName" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">Parent's surname</span>
+                <InputText @bind-Value="form.ParentSurname" type="text" />
+                <ValidationMessage For="() => form.ParentSurname" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">Parent's cell number</span>
+                <InputText @bind-Value="form.ParentCellNo" type="tel" />
+                <ValidationMessage For="() => form.ParentCellNo" />
+            </label>
+        </fieldset>
+
+        <div class="form-actions">
+            <a href="/" class="btn-cancel">Cancel</a>
+            <button type="submit" class="btn-register" disabled="@isSubmitting"
+                    @onclick="() => checkInAfter = false">
+                Register
+            </button>
+            <button type="submit" class="btn-register-checkin" disabled="@isSubmitting"
+                    @onclick="() => checkInAfter = true">
+                @(isSubmitting ? "Working…" : "Register & Check In")
+            </button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private YouthFormModel form = new();
+    private List<Youth> similarMatches = [];
+    private bool isSubmitting;
+    private bool checkInAfter = true;   // set by whichever submit button was pressed
+    private CancellationTokenSource? similarCts;
+
+    private async Task OnNameOrSurnameChanged()
+    {
+        similarCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        similarCts = cts;
+        try
+        {
+            await Task.Delay(400, cts.Token);
+            var found = await YouthService.FindSimilarAsync(form.Name, form.Surname, cts.Token);
+            if (cts.Token.IsCancellationRequested)
+            {
+                return;
+            }
+            similarMatches = found;
+            StateHasChanged();
+        }
+        catch (TaskCanceledException)
+        {
+            // expected when the user keeps typing
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        isSubmitting = true;
+        var youth = await YouthService.CreateAsync(form);
+        if (checkInAfter)
+        {
+            await CheckInService.CheckInAsync(youth.Id);
+            Navigation.NavigateTo($"/?welcome={Uri.EscapeDataString(youth.FullName)}");
+        }
+        else
+        {
+            Navigation.NavigateTo($"/?added={Uri.EscapeDataString(youth.FullName)}");
+        }
+    }
+}

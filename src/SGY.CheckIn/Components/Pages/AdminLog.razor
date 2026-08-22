@@ -1,0 +1,70 @@
+@page "/admin/log"
+@attribute [Authorize]
+@inject CheckInService CheckInService
+
+<PageTitle>Check-In Log — SGY Check-In</PageTitle>
+
+<div class="admin-log-page">
+    <h1>Check-in log</h1>
+
+    <label class="field date-picker-field">
+        <span class="field-label">Date</span>
+        <input type="date" value="@selectedDate.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" />
+    </label>
+
+    @if (checkIns.Count == 0)
+    {
+        <p class="empty-state">No check-ins on @selectedDate.ToString("dddd, d MMMM yyyy").</p>
+    }
+    else
+    {
+        <p class="log-count">@checkIns.Count check-in@(checkIns.Count == 1 ? "" : "s")</p>
+        <div class="log-table-wrap">
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Name</th>
+                        <th>Grade</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in checkIns)
+                    {
+                        <tr>
+                            <td>@FormatLocalTime(c.Timestamp)</td>
+                            <td>@c.Youth.FullName</td>
+                            <td>@c.Youth.Grade.ToDisplayString()</td>
+                            <td><a href="@($"/admin/youth/{c.YouthId}/edit")">Edit</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Now);
+    private List<CheckInRecord> checkIns = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var date))
+        {
+            selectedDate = date;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        checkIns = await CheckInService.GetByDateAsync(selectedDate);
+    }
+
+    private static string FormatLocalTime(DateTime utc) =>
+        TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local).ToString("h:mm tt");
+}
