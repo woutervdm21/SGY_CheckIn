@@ -41,6 +41,32 @@ public class YouthService(IDbContextFactory<AppDbContext> dbFactory)
     }
 
     /// <summary>
+    /// Full profile listing for the admin manage page — includes archived youth (so they
+    /// can be found and un-archived) and optionally filtered by a search term.
+    /// </summary>
+    public async Task<List<Youth>> ListAsync(string? term = null, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var query = db.Youths.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(term))
+        {
+            term = term.Trim();
+            var pattern = $"%{term}%";
+            query = query.Where(y =>
+                EF.Functions.Like(y.Name, pattern) ||
+                EF.Functions.Like(y.Surname, pattern) ||
+                EF.Functions.Like(y.Name + " " + y.Surname, pattern));
+        }
+
+        return await query
+            .OrderBy(y => y.IsArchived)
+            .ThenBy(y => y.Surname)
+            .ThenBy(y => y.Name)
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
     /// Loose duplicate check used as a non-blocking nudge during registration: same
     /// surname (case-insensitive) plus a name that's an exact match or shares its first
     /// few letters. Never a hard block — two kids can legitimately share a name.
@@ -91,6 +117,16 @@ public class YouthService(IDbContextFactory<AppDbContext> dbFactory)
         var youth = await db.Youths.FirstOrDefaultAsync(y => y.Id == id, ct)
             ?? throw new InvalidOperationException($"Youth {id} not found.");
         youth.IsArchived = true;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Restores a previously archived youth so they show up in search and the profile list again.</summary>
+    public async Task UnarchiveAsync(int id, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var youth = await db.Youths.FirstOrDefaultAsync(y => y.Id == id, ct)
+            ?? throw new InvalidOperationException($"Youth {id} not found.");
+        youth.IsArchived = false;
         await db.SaveChangesAsync(ct);
     }
 }

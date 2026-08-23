@@ -969,6 +969,39 @@ legend {
     margin-bottom: var(--space-4);
 }
 
+/* Log toolbar: date picker and "Back to Check In" side by side, 50/50. */
+.log-toolbar {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+    .log-toolbar > * {
+        flex: 1;
+        min-width: 0;
+    }
+
+.log-back-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-strong);
+    color: var(--text);
+    text-decoration: none;
+    font-family: var(--font-display);
+    font-weight: 700;
+    transition: border-color .15s, color .15s, background .15s;
+}
+
+    .log-back-button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft-bg);
+    }
+
 .log-count {
     color: var(--text-muted);
     font-size: 0.9rem;
@@ -1023,6 +1056,185 @@ legend {
         .log-table a:hover {
             text-decoration: underline;
         }
+
+/* =========================================================================
+   Roles, profiles, and form extras
+   ========================================================================= */
+
+/* Header account area: role badge + sign out. */
+.app-account {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.role-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+}
+
+.role-admin {
+    color: var(--accent);
+    background: var(--accent-soft-bg);
+}
+
+.role-volunteer {
+    color: var(--text-muted);
+    background: var(--bg-elevated-2);
+}
+
+/* Checkbox + "Same as child" inline control. */
+input[type=checkbox] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.same-surname {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.field input:disabled, .field select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Manage profiles (admin). */
+.profiles-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.profiles-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+    .profiles-header h1 {
+        font-size: 1.6rem;
+    }
+
+    .profiles-header .cancel-link {
+        width: auto;
+    }
+
+.profiles-meta {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    margin: 0;
+}
+
+.profile-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.profile-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 14px 18px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+    .profile-row.archived {
+        opacity: 0.6;
+    }
+
+.profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.profile-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.profile-sub {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.archived-tag {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--warning);
+    background: var(--warning-bg);
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+}
+
+.profile-edit {
+    flex-shrink: 0;
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: border-color .15s, color .15s, background .15s;
+}
+
+    .profile-edit:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft-bg);
+    }
+
+.archive-button.restore {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+    .archive-button.restore:hover {
+        background: var(--accent-soft-bg);
+        border-color: var(--accent);
+        color: var(--accent);
+    }
 
 /* =========================================================================
    Framework chrome (Blazor reconnect/error UI) — reskinned to match

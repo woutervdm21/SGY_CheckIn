@@ -35,7 +35,7 @@
 
             <label class="field">
                 <span class="field-label">Surname</span>
-                <InputText @bind-Value="form.Surname" @bind-Value:after="OnNameOrSurnameChanged" type="text" />
+                <InputText @bind-Value="form.Surname" @bind-Value:after="OnSurnameChanged" type="text" />
                 <ValidationMessage For="() => form.Surname" />
             </label>
 
@@ -73,11 +73,17 @@
                 <ValidationMessage For="() => form.ParentName" />
             </label>
 
-            <label class="field">
-                <span class="field-label">Parent's surname</span>
-                <InputText @bind-Value="form.ParentSurname" type="text" />
+            <div class="field">
+                <span class="field-label field-label-row">
+                    <span>Parent's surname</span>
+                    <label class="same-surname">
+                        <input type="checkbox" checked="@sameSurname" @onchange="OnSameSurnameChanged" />
+                        Same as child
+                    </label>
+                </span>
+                <InputText @bind-Value="form.ParentSurname" type="text" disabled="@sameSurname" />
                 <ValidationMessage For="() => form.ParentSurname" />
-            </label>
+            </div>
 
             <label class="field">
                 <span class="field-label">Parent's cell number</span>
@@ -105,7 +111,26 @@
     private List<Youth> similarMatches = [];
     private bool isSubmitting;
     private bool checkInAfter = true;   // set by whichever submit button was pressed
+    private bool sameSurname = true;    // parent shares the child's surname (the common case)
     private CancellationTokenSource? similarCts;
+
+    private void OnSameSurnameChanged(ChangeEventArgs e)
+    {
+        sameSurname = e.Value as bool? ?? false;
+        if (sameSurname)
+        {
+            form.ParentSurname = form.Surname;
+        }
+    }
+
+    private async Task OnSurnameChanged()
+    {
+        if (sameSurname)
+        {
+            form.ParentSurname = form.Surname;
+        }
+        await OnNameOrSurnameChanged();
+    }
 
     private async Task OnNameOrSurnameChanged()
     {

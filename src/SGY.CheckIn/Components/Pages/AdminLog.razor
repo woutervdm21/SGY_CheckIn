@@ -7,10 +7,13 @@
 <div class="admin-log-page">
     <h1>Check-in log</h1>
 
-    <label class="field date-picker-field">
-        <span class="field-label">Date</span>
-        <input type="date" value="@selectedDate.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" />
-    </label>
+    <div class="log-toolbar">
+        <label class="field">
+            <span class="field-label">Date</span>
+            <input type="date" value="@selectedDate.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" />
+        </label>
+        <a href="/" class="log-back-button">Back to Check In</a>
+    </div>
 
     @if (checkIns.Count == 0)
     {
@@ -36,7 +39,11 @@
                             <td>@FormatLocalTime(c.Timestamp)</td>
                             <td>@c.Youth.FullName</td>
                             <td>@c.Youth.Grade.ToDisplayString()</td>
-                            <td><a href="@($"/admin/youth/{c.YouthId}/edit")">Edit</a></td>
+                            <td>
+                                <AuthorizeView Roles="@Roles.Admin">
+                                    <a href="@($"/admin/youth/{c.YouthId}/edit")">Edit</a>
+                                </AuthorizeView>
+                            </td>
                         </tr>
                     }
                 </tbody>

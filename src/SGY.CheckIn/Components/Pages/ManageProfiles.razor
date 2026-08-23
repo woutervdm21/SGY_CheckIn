@@ -1,0 +1,88 @@
+@page "/admin/profiles"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject YouthService YouthService
+
+<PageTitle>Profiles — SGY Check-In</PageTitle>
+
+<div class="profiles-page">
+    <div class="profiles-header">
+        <h1>Youth profiles</h1>
+        <a href="/register" class="cancel-link">+ New youth</a>
+    </div>
+
+    <input value="@searchTerm"
+           @oninput="OnSearchInput"
+           placeholder="Search profiles by name or surname..."
+           autocomplete="off"
+           class="search-box"
+           aria-label="Search profiles" />
+
+    @if (loading)
+    {
+        <p class="profiles-meta">Loading…</p>
+    }
+    else if (profiles.Count == 0)
+    {
+        <p class="empty-state">
+            @(string.IsNullOrWhiteSpace(searchTerm) ? "No youth registered yet." : $"No profiles match \"{searchTerm}\".")
+        </p>
+    }
+    else
+    {
+        <p class="profiles-meta">@profiles.Count profile@(profiles.Count == 1 ? "" : "s")</p>
+        <ul class="profile-list">
+            @foreach (var y in profiles)
+            {
+                <li class="profile-row @(y.IsArchived ? "archived" : "")">
+                    <div class="profile-info">
+                        <span class="profile-name">@y.FullName</span>
+                        <span class="profile-sub">
+                            @y.Grade.ToDisplayString() · @y.CellNo
+                            @if (y.IsArchived)
+                            {
+                                <span class="archived-tag">Archived</span>
+                            }
+                        </span>
+                    </div>
+                    <a href="@($"/admin/youth/{y.Id}/edit")" class="profile-edit">Edit</a>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private string searchTerm = "";
+    private List<Youth> profiles = [];
+    private bool loading = true;
+    private CancellationTokenSource? debounceCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        profiles = await YouthService.ListAsync();
+        loading = false;
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        debounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        debounceCts = cts;
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            var found = await YouthService.ListAsync(searchTerm, cts.Token);
+            if (cts.Token.IsCancellationRequested)
+            {
+                return;
+            }
+            profiles = found;
+            StateHasChanged();
+        }
+        catch (TaskCanceledException)
+        {
+            // expected while the user keeps typing
+        }
+    }
+}

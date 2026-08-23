@@ -36,12 +36,16 @@ builder.Services.AddDbContextFactory<AppDbContext>(options => options.UseSqlite(
 builder.Services.AddScoped<YouthService>();
 builder.Services.AddScoped<CheckInService>();
 
-// Shared-password cookie auth: one credential for all staff/devices, each device gets
-// its own independent cookie on sign-in (so multiple tablets can be logged in at once).
+// Shared-password cookie auth: two credentials (volunteer/admin), each device gets its own
+// independent cookie on sign-in (so multiple tablets can be logged in at once).
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
         options.LoginPath = "/login";
+        // A logged-in volunteer who reaches an admin-only page lands here (rather than the
+        // default /Account/AccessDenied, which doesn't exist and shows a confusing "Not
+        // Found"). From the login screen they can enter the admin password if they have it.
+        options.AccessDeniedPath = "/login";
         options.ExpireTimeSpan = TimeSpan.FromDays(14);
         options.SlidingExpiration = true;
         options.Cookie.Name = "sgy_checkin_auth";
@@ -107,9 +111,21 @@ app.MapPost("/account/login", async (HttpContext http, IConfiguration config) =>
     var form = await http.Request.ReadFormAsync();
     var password = form["password"].ToString();
     var returnUrl = form["returnUrl"].ToString();
-    var expectedHash = config["CheckInAuth:PasswordHash"];
 
-    if (!PasswordHashing.Verify(expectedHash, password))
+    // One password box, two roles: whichever password matches decides the role. Admin is
+    // checked first so that if the same value were ever set for both, it wins. Volunteers
+    // get check-in + registration; admins additionally get profile management.
+    string? role = null;
+    if (PasswordHashing.Verify(config["CheckInAuth:AdminPasswordHash"], password))
+    {
+        role = Roles.Admin;
+    }
+    else if (PasswordHashing.Verify(config["CheckInAuth:VolunteerPasswordHash"], password))
+    {
+        role = Roles.Volunteer;
+    }
+
+    if (role is null)
     {
         var retryUrl = "/login?error=1";
         if (!string.IsNullOrEmpty(returnUrl))
@@ -120,7 +136,7 @@ app.MapPost("/account/login", async (HttpContext http, IConfiguration config) =>
     }
 
     var identity = new ClaimsIdentity(
-        [new Claim(ClaimTypes.Name, "staff")],
+        [new Claim(ClaimTypes.Name, role), new Claim(ClaimTypes.Role, role)],
         CookieAuthenticationDefaults.AuthenticationScheme);
     await http.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 

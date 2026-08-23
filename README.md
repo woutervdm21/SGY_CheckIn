@@ -2,20 +2,38 @@
 
 An app for Friday-night youth group check-in. Replaces the paper tick-list and new-member
 form: search for a returning youth by name and check them in with one tap, or register a new
-youth on the spot (they get checked in automatically).
+youth on the spot.
 
 It runs in Docker on the church's network — no internet needed once it's set up.
 
+## Two access levels
+
+There are two passwords, one for each level:
+
+- **Volunteer** — can check youth in and register new ones. This is what most helpers use.
+- **Admin** — can do everything a volunteer can, plus manage all youth profiles (search,
+  edit details, archive/restore). Use the **Profiles** page in the top menu.
+
+Everyone types their password on the same screen; whichever password they enter decides what
+they can do.
+
 ## Setting it up
 
-**1. Set the staff password.** The app won't let anyone in until you do this.
+**1. Set the two passwords.** The app won't let anyone in until you do this.
+
+Generate a code for each password:
 
 ```
-docker compose run --rm sgy-checkin --hash-password "YourChosenPassword"
+docker compose run --rm sgy-checkin --hash-password "YourVolunteerPassword"
+docker compose run --rm sgy-checkin --hash-password "YourAdminPassword"
 ```
 
-This prints a long code. Copy it, open `docker-compose.yml`, and paste it in as the value of
-`CheckInAuth__PasswordHash`.
+Each prints a long code. Open `docker-compose.yml` and paste them in:
+
+- the volunteer code as `CheckInAuth__VolunteerPasswordHash`
+- the admin code as `CheckInAuth__AdminPasswordHash`
+
+(You can leave one blank to disable that level — but you'll usually want both set.)
 
 **2. Check the time zone.** `docker-compose.yml` has `TZ: Africa/Johannesburg` — change this
 if the church isn't in South Africa. This just makes sure check-in times and "today" are
@@ -38,8 +56,8 @@ IPv4 address.
 - **To start it again:** `docker compose up -d` (no need for `--build` unless something in the
   app changed).
 - **To update after a change:** `docker compose up -d --build`.
-- **To change the password:** repeat step 1 above with a new password, paste in the new code,
-  then `docker compose up -d`.
+- **To change a password:** repeat step 1 for that level with a new password, paste in the new
+  code, then `docker compose up -d`.
 
 ## Where the data lives
 
@@ -57,4 +75,5 @@ dotnet ef database update --project src/SGY.CheckIn
 dotnet run --project src/SGY.CheckIn
 ```
 
-Then open the address it prints. The password for local testing is **checkin123**.
+Then open the address it prints. Local testing passwords: **checkin123** (volunteer) and
+**admin123** (admin).

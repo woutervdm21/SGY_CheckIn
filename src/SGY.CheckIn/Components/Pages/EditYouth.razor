@@ -1,5 +1,5 @@
 @page "/admin/youth/{Id:int}/edit"
-@attribute [Authorize]
+@attribute [Authorize(Roles = Roles.Admin)]
 @inject YouthService YouthService
 @inject NavigationManager Navigation
 
@@ -85,13 +85,18 @@
             </fieldset>
 
             <div class="form-actions">
-                <a href="/admin/log" class="cancel-link">Back to log</a>
+                <a href="/admin/profiles" class="cancel-link">Back to profiles</a>
                 <button type="submit" class="submit-button">Save changes</button>
             </div>
         </EditForm>
 
         <div class="archive-section">
-            @if (!confirmingArchive)
+            @if (youth.IsArchived)
+            {
+                <p>This youth is archived — hidden from check-in search.</p>
+                <button type="button" class="archive-button restore" @onclick="DoUnarchive">Restore this youth</button>
+            }
+            else if (!confirmingArchive)
             {
                 <button type="button" class="archive-button" @onclick="() => confirmingArchive = true">
                     Archive this youth
@@ -136,6 +141,12 @@
     private async Task DoArchive()
     {
         await YouthService.ArchiveAsync(Id);
-        Navigation.NavigateTo("/admin/log");
+        Navigation.NavigateTo("/admin/profiles");
+    }
+
+    private async Task DoUnarchive()
+    {
+        await YouthService.UnarchiveAsync(Id);
+        youth = await YouthService.GetByIdAsync(Id);
     }
 }
