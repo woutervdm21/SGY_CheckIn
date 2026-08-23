@@ -16,5 +16,8 @@ obj/
 .idea/
 *.suo
 
+# Local dev password overrides (never commit working passwords)
+docker-compose.override.yml
+
 # Scratch
 logo_preview.png
