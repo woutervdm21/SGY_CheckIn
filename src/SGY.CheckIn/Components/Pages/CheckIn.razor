@@ -53,8 +53,13 @@
 
             @if (todayCheckIn is not null)
             {
-                <p class="already-checked-in">Already checked in today at @FormatLocalTime(todayCheckIn.Timestamp)</p>
-                <button type="button" class="checkin-button secondary" @onclick="DoCheckIn">Check In Again</button>
+                @* Deliberately not a button: checking the same youth in a second time only
+                   adds a duplicate row to the log, so this states the situation rather than
+                   offering an action with no useful outcome. *@
+                <div class="already-checked-in" role="status">
+                    <span class="already-checked-in-title">Already checked in</span>
+                    <span class="already-checked-in-time">at @FormatLocalTime(todayCheckIn.Timestamp)</span>
+                </div>
             }
             else
             {

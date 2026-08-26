@@ -470,12 +470,19 @@ input.valid.modified, select.valid.modified {
     letter-spacing: -0.01em;
 }
 
+/* On phones the three header groups can't share one row. Rather than letting the
+   account group wrap under the logo (left-aligned and adrift), the nav is ordered
+   last and forced onto its own full-width row: the top row becomes brand + role
+   badge + Sign out, and the nav sits beneath as a full-width segmented control —
+   which also gives the links bigger tap targets. Restored to one row at 720px. */
 .app-nav {
     display: flex;
     gap: 2px;
     background: var(--bg-elevated-2);
     padding: 4px;
     border-radius: var(--radius-pill);
+    order: 3;
+    flex-basis: 100%;
 }
 
     .app-nav a {
@@ -486,6 +493,8 @@ input.valid.modified, select.valid.modified {
         font-size: 0.88rem;
         font-weight: 600;
         transition: color .15s, background .15s;
+        flex: 1;
+        text-align: center;
     }
 
         .app-nav a:hover {
@@ -665,12 +674,33 @@ input.valid.modified, select.valid.modified {
     font-size: 0.95rem;
 }
 
+/* Takes the check-in button's place once the youth is already checked in today, so it
+   matches that button's footprint (full width, same padding) to keep the panel from
+   jumping. Red rather than green: this is a stop, not a success — the volunteer should
+   move on to the next youth rather than tap anything here. */
 .already-checked-in {
-    background: var(--success-bg);
-    color: var(--success);
-    padding: 10px 14px;
-    border-radius: var(--radius-sm);
-    font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 100%;
+    padding: 16px;
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid rgba(255, 107, 107, 0.35);
+    border-radius: var(--radius-md);
+    text-align: center;
+}
+
+.already-checked-in-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+
+.already-checked-in-time {
+    font-size: 0.88rem;
+    opacity: 0.85;
 }
 
 .checkin-button {
@@ -773,6 +803,15 @@ input.valid.modified, select.valid.modified {
 
     .checkin-button {
         padding: 20px;
+        font-size: 1.2rem;
+    }
+
+    /* Kept in step with .checkin-button above — the two occupy the same slot. */
+    .already-checked-in {
+        padding: 20px;
+    }
+
+    .already-checked-in-title {
         font-size: 1.2rem;
     }
 
@@ -1071,11 +1110,13 @@ legend {
    Roles, profiles, and form extras
    ========================================================================= */
 
-/* Header account area: role badge + sign out. */
+/* Header account area: role badge + sign out. Ordered ahead of the nav so it stays
+   on the brand's row at phone widths (see .app-nav). */
 .app-account {
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    order: 2;
 }
 
 .role-badge {
@@ -1305,4 +1346,52 @@ input[type=checkbox] {
     .login-card {
         padding: var(--space-8) var(--space-6) var(--space-7);
     }
+}
+
+/* Small phones (~360px): at full size the brand and the account group together overrun
+   the row, so the account wraps to a line of its own and the header costs three rows.
+   Tightening both keeps them paired on the top row — two rows, same as larger phones. */
+@media (max-width: 460px) {
+    .app-header {
+        gap: var(--space-2);
+        padding-left: var(--space-3);
+        padding-right: var(--space-3);
+    }
+
+    .app-logo {
+        width: 22px;
+        height: 22px;
+    }
+
+    .app-brand span {
+        font-size: 0.9rem;
+    }
+
+    .app-account {
+        gap: var(--space-2);
+    }
+
+    .role-badge {
+        font-size: 0.6rem;
+        padding: 3px 7px;
+        letter-spacing: 0.03em;
+    }
+
+    .app-signout button {
+        padding: 7px 11px;
+        font-size: 0.76rem;
+    }
+}
+
+/* Enough room for brand + nav + account on one row. 720px rather than 640px so the
+   admin header — which carries a third nav link — also fits before switching back. */
+@media (min-width: 720px) {
+    .app-nav {
+        order: 0;
+        flex-basis: auto;
+    }
+
+        .app-nav a {
+            flex: 0 0 auto;
+        }
 }

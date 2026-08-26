@@ -8,7 +8,7 @@
     <!-- Single source of truth for the app version, shown in the UI footer (see
          AppInfo.cs) so whoever's running the app can tell which build is deployed.
          Bump this on releases that matter to track (bug fixes, new features). -->
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
