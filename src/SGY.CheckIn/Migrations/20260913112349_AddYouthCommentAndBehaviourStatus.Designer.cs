@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SGY.CheckIn.Data;
 
@@ -10,9 +11,11 @@ using SGY.CheckIn.Data;
 namespace SGY.CheckIn.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913112349_AddYouthCommentAndBehaviourStatus")]
+    partial class AddYouthCommentAndBehaviourStatus
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -63,9 +66,6 @@ namespace SGY.CheckIn.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Grade")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("InCareVillage")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsArchived")

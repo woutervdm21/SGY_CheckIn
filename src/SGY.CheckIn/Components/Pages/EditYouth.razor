@@ -1,5 +1,8 @@
 @page "/admin/youth/{Id:int}/edit"
-@attribute [Authorize(Roles = Roles.Admin)]
+@* Any signed-in user can correct a youth's details — volunteers reach this from the
+   check-in log. The archive/restore controls further down stay admin-only, since hiding
+   a youth from check-in search is profile management rather than fixing a mistake. *@
+@attribute [Authorize]
 @inject YouthService YouthService
 @inject NavigationManager Navigation
 
@@ -84,12 +87,86 @@
                 </label>
             </fieldset>
 
+            @* Status and comment are admin-only to change. Volunteers still see them —
+               a leader on the floor needs to know a youth is flagged — but read-only.
+               YouthService.UpdateAsync ignores both for a non-admin whatever gets posted,
+               so hiding the inputs is presentation, not the actual guard. *@
+            <fieldset>
+                <legend>Leaders' notes</legend>
+
+                @if (isAdmin)
+                {
+                    <label class="field">
+                        <span class="field-label">Status</span>
+                        <InputSelect @bind-Value="form.BehaviourStatus">
+                            @foreach (var status in Enum.GetValues<BehaviourStatus>())
+                            {
+                                <option value="@status">@status.ToDisplayString()</option>
+                            }
+                        </InputSelect>
+                    </label>
+
+                    @* Care Village is its own flag, not a third status: a youth can be
+                       flagged red and in Care Village at the same time. *@
+                    <label class="checkbox-field">
+                        <InputCheckbox @bind-Value="form.InCareVillage" />
+                        <span>Care Village</span>
+                    </label>
+
+                    <label class="field">
+                        <span class="field-label">Comment <span class="optional">(optional)</span></span>
+                        <InputTextArea @bind-Value="form.Comment" rows="4"
+                                       placeholder="Anything leaders should know — allergies, pastoral notes, why they're flagged." />
+                        <ValidationMessage For="() => form.Comment" />
+                    </label>
+                }
+                else
+                {
+                    <div class="field">
+                        <span class="field-label">Status</span>
+                        <p class="status-badges">
+                            @if (form.BehaviourStatus == BehaviourStatus.Red || !form.InCareVillage)
+                            {
+                                <span class="status-badge @form.BehaviourStatus.ToCssModifier()">
+                                    @form.BehaviourStatus.ToDisplayString()
+                                </span>
+                            }
+                            @if (form.InCareVillage)
+                            {
+                                <span class="status-badge care">Care Village</span>
+                            }
+                        </p>
+                    </div>
+
+                    <div class="field">
+                        <span class="field-label">Comment</span>
+                        <p class="readonly-note">
+                            @(string.IsNullOrWhiteSpace(form.Comment) ? "No notes." : form.Comment)
+                        </p>
+                    </div>
+
+                    <p class="field-hint">Only an admin can change these.</p>
+                }
+            </fieldset>
+
+            @* Volunteers have no access to /admin/profiles, so sending them there would
+               bounce them to the login screen. Point each role at a page it can open. *@
             <div class="form-actions">
-                <a href="/admin/profiles" class="cancel-link">Back to profiles</a>
+                @* Context named explicitly: nested inside EditForm, the implicit "context"
+                   parameter name would collide with the form's own. *@
+                <AuthorizeView Roles="@Roles.Admin" Context="auth">
+                    <Authorized>
+                        <a href="/admin/profiles" class="cancel-link">Back to profiles</a>
+                    </Authorized>
+                    <NotAuthorized>
+                        <a href="/admin/log" class="cancel-link">Back to log</a>
+                    </NotAuthorized>
+                </AuthorizeView>
                 <button type="submit" class="submit-button">Save changes</button>
             </div>
         </EditForm>
 
+        <AuthorizeView Roles="@Roles.Admin">
         <div class="archive-section">
             @if (youth.IsArchived)
             {
@@ -111,6 +188,7 @@
                 </div>
             }
         </div>
+        </AuthorizeView>
     }
 </div>
 
@@ -118,13 +196,19 @@
     [Parameter]
     public int Id { get; set; }
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
     private Youth? youth;
     private YouthFormModel form = new();
     private bool saved;
     private bool confirmingArchive;
+    private bool isAdmin;
 
     protected override async Task OnParametersSetAsync()
     {
+        isAdmin = await IsAdminAsync();
+
         youth = await YouthService.GetByIdAsync(Id);
         if (youth is not null)
         {
@@ -132,9 +216,21 @@
         }
     }
 
+    private async Task<bool> IsAdminAsync()
+    {
+        if (AuthState is null)
+        {
+            return false;
+        }
+
+        var state = await AuthState;
+        return state.User.IsInRole(Roles.Admin);
+    }
+
     private async Task HandleValidSubmit()
     {
-        await YouthService.UpdateAsync(Id, form);
+        // Re-read the role at submit time rather than trusting the field set during render.
+        await YouthService.UpdateAsync(Id, form, await IsAdminAsync());
         saved = true;
     }
 

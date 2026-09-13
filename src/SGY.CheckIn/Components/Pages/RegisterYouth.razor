@@ -92,6 +92,38 @@
             </label>
         </fieldset>
 
+        @* Admin-only, same as on the edit page: a volunteer registering a youth just gets
+           the default green status and no comment. *@
+        @if (isAdmin)
+        {
+            <fieldset>
+                <legend>Leaders' notes</legend>
+
+                <label class="field">
+                    <span class="field-label">Status</span>
+                    <InputSelect @bind-Value="form.BehaviourStatus">
+                        @foreach (var status in Enum.GetValues<BehaviourStatus>())
+                        {
+                            <option value="@status">@status.ToDisplayString()</option>
+                        }
+                    </InputSelect>
+                </label>
+
+                @* Independent of the status above — a youth can be both. *@
+                <label class="checkbox-field">
+                    <InputCheckbox @bind-Value="form.InCareVillage" />
+                    <span>Care Village</span>
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Comment <span class="optional">(optional)</span></span>
+                    <InputTextArea @bind-Value="form.Comment" rows="4"
+                                   placeholder="Anything leaders should know — allergies, pastoral notes, why they're flagged." />
+                    <ValidationMessage For="() => form.Comment" />
+                </label>
+            </fieldset>
+        }
+
         <div class="form-actions">
             <a href="/" class="btn-cancel">Cancel</a>
             <button type="submit" class="btn-register" disabled="@isSubmitting"
@@ -107,12 +139,32 @@
 </div>
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
     private YouthFormModel form = new();
+    private bool isAdmin;
     private List<Youth> similarMatches = [];
     private bool isSubmitting;
     private bool checkInAfter = true;   // set by whichever submit button was pressed
     private bool sameSurname = true;    // parent shares the child's surname (the common case)
     private CancellationTokenSource? similarCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isAdmin = await IsAdminAsync();
+    }
+
+    private async Task<bool> IsAdminAsync()
+    {
+        if (AuthState is null)
+        {
+            return false;
+        }
+
+        var state = await AuthState;
+        return state.User.IsInRole(Roles.Admin);
+    }
 
     private void OnSameSurnameChanged(ChangeEventArgs e)
     {
@@ -157,7 +209,8 @@
     private async Task HandleValidSubmit()
     {
         isSubmitting = true;
-        var youth = await YouthService.CreateAsync(form);
+        // Re-read the role at submit time rather than trusting the field set during render.
+        var youth = await YouthService.CreateAsync(form, await IsAdminAsync());
         if (checkInAfter)
         {
             await CheckInService.CheckInAsync(youth.Id);

@@ -41,6 +41,19 @@ public class YouthFormModel : IValidatableObject
     [StringLength(20)]
     public string ParentCellNo { get; set; } = "";
 
+    /// <summary>
+    /// Admin-only note. Volunteers can open the edit form, so whatever arrives here from a
+    /// volunteer's post is ignored — see <see cref="CopyTo"/>.
+    /// </summary>
+    [StringLength(2000, ErrorMessage = "Comment can't be longer than 2000 characters")]
+    public string? Comment { get; set; }
+
+    /// <summary>Admin-only behaviour flag; ignored from a volunteer's post like <see cref="Comment"/>.</summary>
+    public BehaviourStatus BehaviourStatus { get; set; } = BehaviourStatus.Green;
+
+    /// <summary>Admin-only Care Village flag, independent of <see cref="BehaviourStatus"/>.</summary>
+    public bool InCareVillage { get; set; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (DateOfBirth is { } dob)
@@ -61,7 +74,13 @@ public class YouthFormModel : IValidatableObject
         }
     }
 
-    public void CopyTo(Youth youth)
+    /// <param name="includeAdminFields">
+    /// Whether to apply the admin-only fields (<see cref="Comment"/>,
+    /// <see cref="BehaviourStatus"/> and <see cref="InCareVillage"/>). False for a
+    /// volunteer: those fields are hidden from their form, and a hand-crafted post must
+    /// not be able to overwrite them.
+    /// </param>
+    public void CopyTo(Youth youth, bool includeAdminFields)
     {
         youth.Name = Name.Trim();
         youth.Surname = Surname.Trim();
@@ -71,6 +90,14 @@ public class YouthFormModel : IValidatableObject
         youth.ParentName = ParentName.Trim();
         youth.ParentSurname = ParentSurname.Trim();
         youth.ParentCellNo = ParentCellNo.Trim();
+
+        if (includeAdminFields)
+        {
+            var comment = Comment?.Trim();
+            youth.Comment = string.IsNullOrEmpty(comment) ? null : comment;
+            youth.BehaviourStatus = BehaviourStatus;
+            youth.InCareVillage = InCareVillage;
+        }
     }
 
     public static YouthFormModel FromYouth(Youth youth) => new()
@@ -83,5 +110,8 @@ public class YouthFormModel : IValidatableObject
         ParentName = youth.ParentName,
         ParentSurname = youth.ParentSurname,
         ParentCellNo = youth.ParentCellNo,
+        Comment = youth.Comment,
+        BehaviourStatus = youth.BehaviourStatus,
+        InCareVillage = youth.InCareVillage,
     };
 }

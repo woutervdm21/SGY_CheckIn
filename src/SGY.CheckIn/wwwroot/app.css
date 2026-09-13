@@ -151,7 +151,7 @@ h1:focus {
 
 /* ---------- Form controls (shared across pages) ---------- */
 
-input[type=text], input[type=tel], input[type=date], input[type=password], select {
+input[type=text], input[type=tel], input[type=date], input[type=password], select, textarea {
     width: 100%;
     padding: 12px 14px;
     font-size: 1rem;
@@ -164,7 +164,7 @@ input[type=text], input[type=tel], input[type=date], input[type=password], selec
 }
 
 /* Registration / edit forms: larger, touch-friendly inputs. */
-.field input, .field select {
+.field input, .field select, .field textarea {
     padding: 16px;
     font-size: 1.1rem;
     border-radius: var(--radius-md);
@@ -178,18 +178,24 @@ select {
     padding-right: 36px;
 }
 
-input:focus, select:focus {
+input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft-bg);
 }
 
-input.invalid, select.invalid {
+input.invalid, select.invalid, textarea.invalid {
     border-color: var(--danger);
 }
 
-input.valid.modified, select.valid.modified {
+input.valid.modified, select.valid.modified, textarea.valid.modified {
     border-color: var(--success);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 96px;
+    line-height: 1.5;
 }
 
 .validation-message {
@@ -624,6 +630,22 @@ input.valid.modified, select.valid.modified {
         border-color: var(--accent);
         background: var(--accent-soft-bg);
     }
+
+/* Behaviour flag on a search result — a bare dot, deliberately quieter than the
+   grade pill next to it. */
+.result-flag {
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--danger);
+}
+
+/* Care Village shares the dot treatment but not the colour, so a youth who is both
+   reads as two separate marks rather than one louder one. */
+.result-flag.care {
+    background: var(--warning);
+}
 
 .result-name {
     font-family: var(--font-display);
@@ -1394,4 +1416,81 @@ input[type=checkbox] {
         .app-nav a {
             flex: 0 0 auto;
         }
+}
+
+/* ---------- Leaders' notes (behaviour status + comment) ---------- */
+
+/* Read-only rendering of the admin-only fields, shown to volunteers on the edit page. */
+.status-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+    margin: 0;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.status-badge::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.status-badge.green {
+    color: var(--success);
+    background: var(--success-bg);
+}
+
+.status-badge.red {
+    color: var(--danger);
+    background: var(--danger-bg);
+}
+
+/* Care Village in amber — distinct from the red/green behaviour pair, so the two flags
+   read as separate things when both are shown. Reuses the warning tokens for the colour
+   only; nothing about Care Village is a warning. */
+.status-badge.care {
+    color: var(--warning);
+    background: var(--warning-bg);
+}
+
+/* Checkbox rows in the admin fieldsets. */
+.checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+    .checkbox-field input[type=checkbox] {
+        flex: none;
+    }
+
+.readonly-note {
+    margin: 0;
+    padding: 12px 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    white-space: pre-wrap;
+}
+
+.field-hint {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: 0.82rem;
 }
