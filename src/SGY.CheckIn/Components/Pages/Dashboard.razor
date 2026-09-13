@@ -1,0 +1,262 @@
+@page "/admin/dashboard"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject ReportingService Reporting
+@inject CheckInService CheckInService
+
+<PageTitle>Dashboard — SGY Check-In</PageTitle>
+
+<div class="dashboard-page">
+    <h1>Dashboard</h1>
+
+    @* Filters sit in one row above the numbers they change, so it's always clear which
+       period the figures below describe. *@
+    <div class="report-toolbar">
+        <div class="report-presets">
+            <button type="button" class="preset @(IsPreset(42) ? "active" : "")" @onclick="() => ApplyPreset(42)">Last 6 weeks</button>
+            <button type="button" class="preset @(IsPreset(84) ? "active" : "")" @onclick="() => ApplyPreset(84)">Last 12 weeks</button>
+            <button type="button" class="preset @(IsPreset(365) ? "active" : "")" @onclick="() => ApplyPreset(365)">Last year</button>
+        </div>
+        <div class="report-range">
+            <label class="field">
+                <span class="field-label">From</span>
+                <input type="date" value="@from.ToString("yyyy-MM-dd")" @onchange="OnFromChanged" />
+            </label>
+            <label class="field">
+                <span class="field-label">To</span>
+                <input type="date" value="@to.ToString("yyyy-MM-dd")" @onchange="OnToChanged" />
+            </label>
+        </div>
+    </div>
+
+    @if (report is null)
+    {
+        <p class="empty-state">Loading…</p>
+    }
+    else
+    {
+        <p class="report-period">@PeriodLabel</p>
+
+        @* Headline numbers: four single values, so tiles rather than a chart. "Checked in
+           today" is deliberately absolute (not part of the range) — it's the number a
+           leader glances at on the night. *@
+        <div class="stat-tiles">
+            <div class="stat-tile">
+                <span class="stat-value">@todayCount</span>
+                <span class="stat-label">Checked in today</span>
+            </div>
+            <div class="stat-tile">
+                <span class="stat-value">@report.UniqueYouth</span>
+                <span class="stat-label">Youth in this period</span>
+            </div>
+            <div class="stat-tile">
+                <span class="stat-value">@report.AveragePerSession.ToString("0.#")</span>
+                <span class="stat-label">Average per evening</span>
+            </div>
+            <div class="stat-tile">
+                <span class="stat-value">@report.NewRegistrations</span>
+                <span class="stat-label">Newly registered</span>
+            </div>
+        </div>
+
+        @if (report.SessionCount == 0)
+        {
+            <p class="empty-state">No check-ins in this period.</p>
+        }
+        else
+        {
+            <section class="chart-card">
+                <h2>Attendance per evening</h2>
+                <div class="bar-chart" role="img" aria-label="@ChartAriaLabel">
+                    @foreach (var (session, index) in report.Sessions.Select((s, i) => (s, i)))
+                    {
+                        <div class="bar-col" title="@($"{session.Date:ddd d MMM yyyy} — {session.Count} checked in")">
+                            <div class="bar-track">
+                                @* Only the busiest evening carries a number; the rest are read
+                                   off the shape, and the table below has every figure. *@
+                                @if (session.Count == report.BusiestSession)
+                                {
+                                    <span class="bar-peak-label">@session.Count</span>
+                                }
+                                <div class="bar" style="height: @(BarHeight(session.Count))%"></div>
+                            </div>
+                            <span class="bar-tick">@(ShowTick(index) ? session.Date.ToString("d MMM") : "")</span>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="chart-card">
+                <h2>Who came, by grade</h2>
+                <div class="grade-bars">
+                    @foreach (var grade in report.ByGrade)
+                    {
+                        <div class="grade-row">
+                            <span class="grade-name">@grade.Grade.ToDisplayString()</span>
+                            <div class="grade-track">
+                                <div class="grade-fill" style="width: @(Percent(grade.Count, report.ByGrade.Max(g => g.Count)))%"></div>
+                            </div>
+                            <span class="grade-count">@grade.Count</span>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            @* Two people lists rather than more aggregates: these are the ones a leader
+               acts on — who to thank, and who to phone. Each name links to its profile. *@
+            <div class="people-lists">
+                <section class="chart-card">
+                    <h2>Came most often</h2>
+                    <ul class="person-list">
+                        @foreach (var youth in report.TopAttendees)
+                        {
+                            <li>
+                                <a class="person-row" href="@($"/admin/youth/{youth.YouthId}/edit")">
+                                    <span class="person-name">@youth.FullName</span>
+                                    <span class="person-grade">@youth.Grade.ToDisplayString()</span>
+                                    <span class="person-metric">@youth.Evenings of @report.SessionCount</span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </section>
+
+                <section class="chart-card">
+                    <h2>Haven't come in this period</h2>
+                    @if (report.Missing.Count == 0)
+                    {
+                        <p class="empty-state">Everyone on the books came at least once.</p>
+                    }
+                    else
+                    {
+                        <ul class="person-list">
+                            @foreach (var youth in report.Missing)
+                            {
+                                <li>
+                                    <a class="person-row" href="@($"/admin/youth/{youth.YouthId}/edit")">
+                                        <span class="person-name">@youth.FullName</span>
+                                        <span class="person-grade">@youth.Grade.ToDisplayString()</span>
+                                        <span class="person-metric @(youth.LastSeen is null ? "never" : "")">
+                                            @(youth.LastSeen is { } seen ? $"Last seen {seen:d MMM yyyy}" : "Never checked in")
+                                        </span>
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                        @if (report.MissingTotal > report.Missing.Count)
+                        {
+                            <p class="list-more">@(report.MissingTotal - report.Missing.Count) more — the longest absences are listed first.</p>
+                        }
+                    }
+                </section>
+            </div>
+
+            <section class="chart-card">
+                <div class="table-head">
+                    <h2>Every evening</h2>
+                    <a class="export-link" href="@CsvUrl">Export CSV</a>
+                </div>
+                <div class="table-scroll">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Checked in</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var session in report.Sessions.OrderByDescending(s => s.Date))
+                            {
+                                <tr>
+                                    <td>@session.Date.ToString("ddd, d MMM yyyy")</td>
+                                    <td>@session.Count</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th scope="row">Total check-ins</th>
+                                <td>@report.TotalCheckIns</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private DateOnly from = DateOnly.FromDateTime(DateTime.Today).AddDays(-84);
+    private DateOnly to = DateOnly.FromDateTime(DateTime.Today);
+    private AttendanceReport? report;
+    private int todayCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        todayCount = await CheckInService.GetTodayCountAsync();
+        await Load();
+    }
+
+    private async Task Load() => report = await Reporting.GetAttendanceAsync(from, to);
+
+    private async Task OnFromChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var parsed))
+        {
+            from = parsed;
+            await Load();
+        }
+    }
+
+    private async Task OnToChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var parsed))
+        {
+            to = parsed;
+            await Load();
+        }
+    }
+
+    private async Task ApplyPreset(int days)
+    {
+        to = DateOnly.FromDateTime(DateTime.Today);
+        from = to.AddDays(-days);
+        await Load();
+    }
+
+    private bool IsPreset(int days) =>
+        to == DateOnly.FromDateTime(DateTime.Today) && from == to.AddDays(-days);
+
+    private string PeriodLabel => $"{from:d MMM yyyy} – {to:d MMM yyyy}";
+
+    private string CsvUrl => $"/admin/reports/checkins.csv?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}";
+
+    private string ChartAriaLabel =>
+        report is null || report.SessionCount == 0
+            ? "Attendance per evening"
+            : $"Attendance per evening, {report.SessionCount} evenings, between " +
+              $"{report.Sessions.Min(s => s.Count)} and {report.BusiestSession} youth. Figures in the table below.";
+
+    private static int Percent(int value, int max) => max <= 0 ? 0 : (int)Math.Round(value * 100.0 / max);
+
+    /// <summary>
+    /// Bars stop short of the plot's ceiling so the label on the busiest evening has
+    /// headroom to sit in rather than overlapping the bar it describes.
+    /// </summary>
+    private int BarHeight(int count) => report is null ? 0 : Percent(count, report.BusiestSession) * 86 / 100;
+
+    /// <summary>
+    /// Thin the date ticks so labels never collide: at most eight across the axis,
+    /// always including the most recent evening.
+    /// </summary>
+    private bool ShowTick(int index)
+    {
+        if (report is null)
+        {
+            return false;
+        }
+
+        var stride = Math.Max(1, (int)Math.Ceiling(report.SessionCount / 8.0));
+        return (report.SessionCount - 1 - index) % stride == 0;
+    }
+}
