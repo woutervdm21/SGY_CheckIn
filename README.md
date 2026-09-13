@@ -10,12 +10,47 @@ It runs in Docker on the church's network — no internet needed once it's set u
 
 There are two passwords, one for each level:
 
-- **Volunteer** — can check youth in and register new ones. This is what most helpers use.
+- **Volunteer** — can check youth in, register new ones, and correct a youth's details from
+  the check-in log. This is what most helpers use.
 - **Admin** — can do everything a volunteer can, plus manage all youth profiles (search,
-  edit details, archive/restore). Use the **Profiles** page in the top menu.
+  edit details, archive/restore), set the leaders' notes on a profile, and see the
+  dashboard. Use the **Profiles** and **Dashboard** pages in the top menu.
 
 Everyone types their password on the same screen; whichever password they enter decides what
 they can do.
+
+## Leaders' notes on a profile
+
+Every youth profile has a **Leaders' notes** section, near the bottom of their details:
+
+- **Status** — everyone starts on *No concerns*. An admin can change this to *Trouble maker*.
+- **Care Village** — a separate tick box, so a youth can be both a trouble maker and in
+  Care Village at the same time.
+- **Comment** — free text for anything leaders should know: allergies, pastoral notes, why
+  someone is flagged.
+
+**Only admins can change these.** Volunteers can see them but the fields are read-only for
+them — useful at the door, since a flagged youth shows a small coloured dot next to their
+name in the check-in search: **red** for trouble maker, **amber** for Care Village. The dot
+says nothing about why; the reason lives on the profile.
+
+Keep in mind these notes are about children. Anyone with the volunteer password can read
+them, and the app does not record who changed a note or when.
+
+## Dashboard (admins only)
+
+The **Dashboard** page answers "how are we doing?" for any stretch of time. Pick a date
+range — or use the *Last 6 weeks* / *12 weeks* / *year* buttons — and it shows:
+
+- how many checked in today, how many different youth came in the period, the average per
+  evening, and how many newly registered
+- attendance for each evening, and a breakdown by grade
+- **Came most often** — the youth who showed up the most, out of the evenings you held
+- **Haven't come in this period** — youth still on the books who didn't come, with when they
+  were last seen (or "Never checked in"), longest absences first. Click a name to open their
+  profile.
+- **Export CSV** — one row per arrival for the chosen range, for the church office. It
+  opens/downloads straight from the browser.
 
 ## Setting it up
 
