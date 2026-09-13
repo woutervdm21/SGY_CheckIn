@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -7,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using SGY.CheckIn.Auth;
 using SGY.CheckIn.Components;
 using SGY.CheckIn.Data;
+using SGY.CheckIn.Models;
 using SGY.CheckIn.Services;
 
 // Special CLI mode: generate a hash for the shared staff password, without starting the
@@ -35,6 +37,7 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 builder.Services.AddDbContextFactory<AppDbContext>(options => options.UseSqlite(connectionString));
 builder.Services.AddScoped<YouthService>();
 builder.Services.AddScoped<CheckInService>();
+builder.Services.AddScoped<ReportingService>();
 
 // Shared-password cookie auth: two credentials (volunteer/admin), each device gets its own
 // independent cookie on sign-in (so multiple tablets can be logged in at once).
@@ -149,5 +152,37 @@ app.MapPost("/account/logout", async (HttpContext http) =>
     await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Redirect("/login");
 }).AllowAnonymous();
+
+// CSV export for the dashboard's date range. A minimal API endpoint rather than a Blazor
+// handler: the browser needs a plain GET it can download, and the interactive circuit
+// can't set response headers. Admin-only, matching the Dashboard page it is linked from.
+app.MapGet("/admin/reports/checkins.csv", async (DateOnly? from, DateOnly? to, ReportingService reporting, CancellationToken ct) =>
+{
+    var today = DateOnly.FromDateTime(DateTime.Today);
+    var start = from ?? today.AddDays(-84);
+    var end = to ?? today;
+
+    var rows = await reporting.GetCheckInRowsAsync(start, end, ct);
+
+    var csv = new StringBuilder();
+    csv.AppendLine("Date,Time,Name,Surname,Grade");
+    foreach (var (localTime, name, surname, grade) in rows)
+    {
+        csv.Append(localTime.ToString("yyyy-MM-dd")).Append(',')
+           .Append(localTime.ToString("HH:mm")).Append(',')
+           .Append(CsvField(name)).Append(',')
+           .Append(CsvField(surname)).Append(',')
+           .AppendLine(grade.ToDisplayString());
+    }
+
+    var fileName = $"sgy-checkins-{start:yyyy-MM-dd}-to-{end:yyyy-MM-dd}.csv";
+    return Results.File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", fileName);
+}).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+
+// Quote a CSV field only when it needs it — names with a comma, quote, or newline.
+static string CsvField(string value) =>
+    value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r')
+        ? $"\"{value.Replace("\"", "\"\"")}\""
+        : value;
 
 app.Run();

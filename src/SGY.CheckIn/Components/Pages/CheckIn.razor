@@ -30,6 +30,17 @@
                         <button type="button"
                                 class="result-row @(selected?.Id == y.Id ? "selected" : "")"
                                 @onclick="() => SelectYouth(y)">
+                            @* Dot only — enough to catch a leader's eye at the door without
+                               spelling out why in front of the queue. The reason lives on
+                               the profile. *@
+                            @if (y.BehaviourStatus == BehaviourStatus.Red)
+                            {
+                                <span class="result-flag" role="img" aria-label="Flagged"></span>
+                            }
+                            @if (y.InCareVillage)
+                            {
+                                <span class="result-flag care" role="img" aria-label="Care Village"></span>
+                            }
                             <span class="result-name">@y.FullName</span>
                             <span class="result-grade">@y.Grade.ToDisplayString()</span>
                             @if (checkedInTodayIds.Contains(y.Id))

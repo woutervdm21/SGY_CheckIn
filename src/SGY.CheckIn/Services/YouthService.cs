@@ -91,22 +91,30 @@ public class YouthService(IDbContextFactory<AppDbContext> dbFactory)
     }
 
     /// <summary>Creates a new youth record and returns it (with its assigned Id).</summary>
-    public async Task<Youth> CreateAsync(YouthFormModel form, CancellationToken ct = default)
+    /// <param name="canEditAdminFields">
+    /// True only for an admin. Comment and behaviour status are admin-only, so a
+    /// volunteer's form never contributes them.
+    /// </param>
+    public async Task<Youth> CreateAsync(YouthFormModel form, bool canEditAdminFields, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var youth = new Youth();
-        form.CopyTo(youth);
+        form.CopyTo(youth, canEditAdminFields);
         db.Youths.Add(youth);
         await db.SaveChangesAsync(ct);
         return youth;
     }
 
-    public async Task UpdateAsync(int id, YouthFormModel form, CancellationToken ct = default)
+    /// <param name="canEditAdminFields">
+    /// True only for an admin. A volunteer's submission leaves the existing comment and
+    /// behaviour status untouched rather than resetting them.
+    /// </param>
+    public async Task UpdateAsync(int id, YouthFormModel form, bool canEditAdminFields, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var youth = await db.Youths.FirstOrDefaultAsync(y => y.Id == id, ct)
             ?? throw new InvalidOperationException($"Youth {id} not found.");
-        form.CopyTo(youth);
+        form.CopyTo(youth, canEditAdminFields);
         await db.SaveChangesAsync(ct);
     }
 

@@ -151,7 +151,7 @@ h1:focus {
 
 /* ---------- Form controls (shared across pages) ---------- */
 
-input[type=text], input[type=tel], input[type=date], input[type=password], select {
+input[type=text], input[type=tel], input[type=date], input[type=password], select, textarea {
     width: 100%;
     padding: 12px 14px;
     font-size: 1rem;
@@ -164,7 +164,7 @@ input[type=text], input[type=tel], input[type=date], input[type=password], selec
 }
 
 /* Registration / edit forms: larger, touch-friendly inputs. */
-.field input, .field select {
+.field input, .field select, .field textarea {
     padding: 16px;
     font-size: 1.1rem;
     border-radius: var(--radius-md);
@@ -178,18 +178,24 @@ select {
     padding-right: 36px;
 }
 
-input:focus, select:focus {
+input:focus, select:focus, textarea:focus {
     outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft-bg);
 }
 
-input.invalid, select.invalid {
+input.invalid, select.invalid, textarea.invalid {
     border-color: var(--danger);
 }
 
-input.valid.modified, select.valid.modified {
+input.valid.modified, select.valid.modified, textarea.valid.modified {
     border-color: var(--success);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 96px;
+    line-height: 1.5;
 }
 
 .validation-message {
@@ -624,6 +630,22 @@ input.valid.modified, select.valid.modified {
         border-color: var(--accent);
         background: var(--accent-soft-bg);
     }
+
+/* Behaviour flag on a search result — a bare dot, deliberately quieter than the
+   grade pill next to it. */
+.result-flag {
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--danger);
+}
+
+/* Care Village shares the dot treatment but not the colour, so a youth who is both
+   reads as two separate marks rather than one louder one. */
+.result-flag.care {
+    background: var(--warning);
+}
 
 .result-name {
     font-family: var(--font-display);
@@ -1394,4 +1416,429 @@ input[type=checkbox] {
         .app-nav a {
             flex: 0 0 auto;
         }
+}
+
+/* ---------- Leaders' notes (behaviour status + comment) ---------- */
+
+/* Read-only rendering of the admin-only fields, shown to volunteers on the edit page. */
+.status-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+    margin: 0;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.status-badge::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.status-badge.green {
+    color: var(--success);
+    background: var(--success-bg);
+}
+
+.status-badge.red {
+    color: var(--danger);
+    background: var(--danger-bg);
+}
+
+/* Care Village in amber — distinct from the red/green behaviour pair, so the two flags
+   read as separate things when both are shown. Reuses the warning tokens for the colour
+   only; nothing about Care Village is a warning. */
+.status-badge.care {
+    color: var(--warning);
+    background: var(--warning-bg);
+}
+
+/* Checkbox rows in the admin fieldsets. */
+.checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+    .checkbox-field input[type=checkbox] {
+        flex: none;
+    }
+
+.readonly-note {
+    margin: 0;
+    padding: 12px 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    white-space: pre-wrap;
+}
+
+.field-hint {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: 0.82rem;
+}
+
+/* ---------- Admin dashboard ---------- */
+
+.dashboard-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    animation: page-in .3s ease both;
+}
+
+    .dashboard-page h1 {
+        font-size: 1.6rem;
+        margin: 0;
+    }
+
+    .dashboard-page h2 {
+        font-family: var(--font-display);
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0 0 var(--space-4);
+    }
+
+/* Filters in one row above the figures they change. */
+.report-toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.report-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.preset {
+    padding: 8px 14px;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+}
+
+    .preset:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
+    }
+
+    .preset.active {
+        color: var(--accent);
+        border-color: var(--accent);
+        background: var(--accent-soft-bg);
+    }
+
+.report-range {
+    display: flex;
+    gap: var(--space-3);
+}
+
+    .report-range .field {
+        flex: 1;
+        max-width: 220px;
+    }
+
+.report-period {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* Four single values — tiles, not a chart. */
+.stat-tiles {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+}
+
+.stat-tile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.stat-value {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 2rem;
+    line-height: 1;
+    color: var(--accent);
+}
+
+.stat-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.chart-card {
+    padding: var(--space-5);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+/* Attendance per evening. One series, so no legend — the heading names it — and only the
+   busiest bar is labelled; the table below carries every figure. */
+.bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 200px;
+}
+
+.bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: 100%;
+}
+
+.bar-track {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--border);
+}
+
+.bar {
+    width: 100%;
+    min-height: 2px;
+    background: var(--accent);
+    border-radius: 4px 4px 0 0;
+    transition: background .15s;
+}
+
+.bar-col:hover .bar {
+    background: var(--accent-2);
+}
+
+.bar-peak-label {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.bar-tick {
+    padding-top: 6px;
+    font-size: 0.65rem;
+    color: var(--text-faint);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Grade breakdown — horizontal bars, few enough rows to label every value. */
+.grade-bars {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.grade-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.grade-name {
+    flex: none;
+    width: 72px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.grade-track {
+    flex: 1;
+    height: 14px;
+    background: var(--bg-input);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+}
+
+.grade-fill {
+    height: 100%;
+    min-width: 2px;
+    background: var(--accent);
+    border-radius: var(--radius-pill);
+}
+
+.grade-count {
+    flex: none;
+    width: 32px;
+    text-align: right;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+/* People lists — who to thank and who to phone. */
+.people-lists {
+    display: grid;
+    gap: var(--space-3);
+}
+
+.person-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.person-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    text-decoration: none;
+}
+
+    .person-list li:last-child .person-row {
+        border-bottom: none;
+    }
+
+    .person-row:hover .person-name {
+        color: var(--accent);
+    }
+
+.person-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.person-grade {
+    flex: none;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--info);
+    background: var(--info-bg);
+    padding: 3px 8px;
+    border-radius: var(--radius-pill);
+    white-space: nowrap;
+}
+
+.person-metric {
+    flex: none;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+    .person-metric.never {
+        color: var(--warning);
+    }
+
+.list-more {
+    margin: var(--space-3) 0 0;
+    font-size: 0.8rem;
+    color: var(--text-faint);
+}
+
+.table-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.export-link {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+    .report-table th {
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--text-faint);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .report-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .report-table tfoot th,
+    .report-table tfoot td {
+        font-weight: 700;
+        color: var(--text);
+        text-transform: none;
+        font-size: 0.9rem;
+        letter-spacing: 0;
+        border-bottom: none;
+    }
+
+@media (min-width: 700px) {
+    .report-toolbar {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: space-between;
+    }
+
+    .stat-tiles {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .people-lists {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .stat-value {
+        font-size: 2.4rem;
+    }
 }

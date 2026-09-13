@@ -39,10 +39,12 @@
                             <td>@FormatLocalTime(c.Timestamp)</td>
                             <td>@c.Youth.FullName</td>
                             <td>@c.Youth.Grade.ToDisplayString()</td>
+                            @* Open to volunteers too: whoever checked a youth in is the one
+                               most likely to spot a mistake in their details, and they can
+                               already enter those same details when registering. Archiving
+                               stays admin-only — see EditYouth. *@
                             <td>
-                                <AuthorizeView Roles="@Roles.Admin">
-                                    <a href="@($"/admin/youth/{c.YouthId}/edit")">Edit</a>
-                                </AuthorizeView>
+                                <a href="@($"/admin/youth/{c.YouthId}/edit")">Edit</a>
                             </td>
                         </tr>
                     }

@@ -34,6 +34,28 @@ public class Youth
     [Required, MaxLength(20)]
     public string ParentCellNo { get; set; } = "";
 
+    /// <summary>
+    /// Free-text admin note about this youth (allergies, pastoral concerns, anything the
+    /// paper form had scribbled in the margin). Admin-only to edit — see
+    /// <see cref="YouthFormModel.CopyTo"/>.
+    /// </summary>
+    [MaxLength(2000)]
+    public string? Comment { get; set; }
+
+    /// <summary>
+    /// Behaviour flag, green unless an admin raises it. Admin-only to edit, same as
+    /// <see cref="Comment"/>.
+    /// </summary>
+    public BehaviourStatus BehaviourStatus { get; set; } = BehaviourStatus.Green;
+
+    /// <summary>
+    /// Whether this youth is part of Care Village. Independent of
+    /// <see cref="BehaviourStatus"/> — a youth can be flagged red and in Care Village at
+    /// the same time — so it's its own flag rather than another status value. Admin-only
+    /// to edit.
+    /// </summary>
+    public bool InCareVillage { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
