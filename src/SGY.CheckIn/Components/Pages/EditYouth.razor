@@ -1,10 +1,13 @@
 @page "/admin/youth/{Id:int}/edit"
 @* Any signed-in user can correct a youth's details — volunteers reach this from the
-   check-in log. The archive/restore controls further down stay admin-only, since hiding
-   a youth from check-in search is profile management rather than fixing a mistake. *@
+   check-in screen ("Edit details", which adds ?from=checkin) and the check-in log. The
+   archive/restore controls further down stay admin-only, since hiding a youth from
+   check-in search is profile management rather than fixing a mistake. *@
 @attribute [Authorize]
 @inject YouthService YouthService
 @inject NavigationManager Navigation
+@inject ToastService Toasts
+@inject ILogger<EditYouth> Logger
 
 <PageTitle>Edit Youth — SGY Check-In</PageTitle>
 
@@ -17,12 +20,7 @@
     {
         <h1>Edit @youth.FullName</h1>
 
-        @if (saved)
-        {
-            <p class="save-confirmation" role="status">Saved.</p>
-        }
-
-        <EditForm Model="form" OnValidSubmit="HandleValidSubmit" FormName="edit-youth">
+        <EditForm Model="form" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="ShowFixFieldsError" FormName="edit-youth">
             <DataAnnotationsValidator />
 
             <fieldset>
@@ -60,7 +58,7 @@
 
                 <label class="field">
                     <span class="field-label">Date of birth</span>
-                    <InputDate @bind-Value="form.DateOfBirth" />
+                    <DateField @bind-Value="form.DateOfBirth" />
                     <ValidationMessage For="() => form.DateOfBirth" />
                 </label>
             </fieldset>
@@ -87,10 +85,10 @@
                 </label>
             </fieldset>
 
-            @* Status and comment are admin-only to change. Volunteers still see them —
+            @* Only the behaviour status is admin-only to change. Volunteers still see it —
                a leader on the floor needs to know a youth is flagged — but read-only.
-               YouthService.UpdateAsync ignores both for a non-admin whatever gets posted,
-               so hiding the inputs is presentation, not the actual guard. *@
+               YouthService.UpdateAsync ignores it for a non-admin whatever gets posted,
+               so hiding the input is presentation, not the actual guard. *@
             <fieldset>
                 <legend>Leaders' notes</legend>
 
@@ -105,48 +103,33 @@
                             }
                         </InputSelect>
                     </label>
-
-                    @* Care Village is its own flag, not a third status: a youth can be
-                       flagged red and in Care Village at the same time. *@
-                    <label class="checkbox-field">
-                        <InputCheckbox @bind-Value="form.InCareVillage" />
-                        <span>Care Village</span>
-                    </label>
-
-                    <label class="field">
-                        <span class="field-label">Comment <span class="optional">(optional)</span></span>
-                        <InputTextArea @bind-Value="form.Comment" rows="4"
-                                       placeholder="Anything leaders should know — allergies, pastoral notes, why they're flagged." />
-                        <ValidationMessage For="() => form.Comment" />
-                    </label>
                 }
                 else
                 {
                     <div class="field">
                         <span class="field-label">Status</span>
                         <p class="status-badges">
-                            @if (form.BehaviourStatus == BehaviourStatus.Red || !form.InCareVillage)
-                            {
-                                <span class="status-badge @form.BehaviourStatus.ToCssModifier()">
-                                    @form.BehaviourStatus.ToDisplayString()
-                                </span>
-                            }
-                            @if (form.InCareVillage)
-                            {
-                                <span class="status-badge care">Care Village</span>
-                            }
+                            <span class="status-badge @form.BehaviourStatus.ToCssModifier()">
+                                @form.BehaviourStatus.ToDisplayString()
+                            </span>
                         </p>
+                        <p class="field-hint">Only an admin can change the status.</p>
                     </div>
-
-                    <div class="field">
-                        <span class="field-label">Comment</span>
-                        <p class="readonly-note">
-                            @(string.IsNullOrWhiteSpace(form.Comment) ? "No notes." : form.Comment)
-                        </p>
-                    </div>
-
-                    <p class="field-hint">Only an admin can change these.</p>
                 }
+
+                @* Care Village is its own flag, not a third status: a youth can be
+                   flagged red and in Care Village at the same time. *@
+                <label class="checkbox-field">
+                    <InputCheckbox @bind-Value="form.InCareVillage" />
+                    <span>Care Village</span>
+                </label>
+
+                <label class="field">
+                    <span class="field-label">Comment <span class="optional">(optional)</span></span>
+                    <InputTextArea @bind-Value="form.Comment" rows="4"
+                                   placeholder="Anything leaders should know — allergies, pastoral notes." />
+                    <ValidationMessage For="() => form.Comment" />
+                </label>
             </fieldset>
 
             @* Volunteers have no access to /admin/profiles, so sending them there would
@@ -154,14 +137,21 @@
             <div class="form-actions">
                 @* Context named explicitly: nested inside EditForm, the implicit "context"
                    parameter name would collide with the form's own. *@
-                <AuthorizeView Roles="@Roles.Admin" Context="auth">
-                    <Authorized>
-                        <a href="/admin/profiles" class="cancel-link">Back to profiles</a>
-                    </Authorized>
-                    <NotAuthorized>
-                        <a href="/admin/log" class="cancel-link">Back to log</a>
-                    </NotAuthorized>
-                </AuthorizeView>
+                @if (FromCheckIn)
+                {
+                    <a href="@CheckInUrl" class="cancel-link">Back to check-in</a>
+                }
+                else
+                {
+                    <AuthorizeView Roles="@Roles.Admin" Context="auth">
+                        <Authorized>
+                            <a href="/admin/profiles" class="cancel-link">Back to profiles</a>
+                        </Authorized>
+                        <NotAuthorized>
+                            <a href="/admin/log" class="cancel-link">Back to log</a>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                }
                 <button type="submit" class="submit-button">Save changes</button>
             </div>
         </EditForm>
@@ -199,9 +189,17 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
+    // "checkin" when opened from the check-in screen: saving goes straight back there with
+    // this youth still selected, ready to check in.
+    [SupplyParameterFromQuery(Name = "from")]
+    private string? From { get; set; }
+
+    private bool FromCheckIn => From == "checkin";
+
+    private string CheckInUrl => $"/?youth={Id}";
+
     private Youth? youth;
     private YouthFormModel form = new();
-    private bool saved;
     private bool confirmingArchive;
     private bool isAdmin;
 
@@ -229,20 +227,55 @@
 
     private async Task HandleValidSubmit()
     {
-        // Re-read the role at submit time rather than trusting the field set during render.
-        await YouthService.UpdateAsync(Id, form, await IsAdminAsync());
-        saved = true;
+        try
+        {
+            // Re-read the role at submit time rather than trusting the field set during render.
+            await YouthService.UpdateAsync(Id, form, await IsAdminAsync());
+            Toasts.ShowSuccess("Saved successfully");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Saving youth {YouthId} failed", Id);
+            Toasts.ShowError("Couldn't save the changes. Please try again.");
+            return;
+        }
+
+        if (FromCheckIn)
+        {
+            Navigation.NavigateTo(CheckInUrl);
+        }
     }
+
+    private void ShowFixFieldsError() =>
+        Toasts.ShowError("Not saved. Fix the fields marked in red.");
 
     private async Task DoArchive()
     {
-        await YouthService.ArchiveAsync(Id);
-        Navigation.NavigateTo("/admin/profiles");
+        try
+        {
+            await YouthService.ArchiveAsync(Id);
+            Toasts.ShowSuccess($"{youth?.FullName} archived");
+            Navigation.NavigateTo("/admin/profiles");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Archiving youth {YouthId} failed", Id);
+            Toasts.ShowError("Couldn't archive them. Please try again.");
+        }
     }
 
     private async Task DoUnarchive()
     {
-        await YouthService.UnarchiveAsync(Id);
-        youth = await YouthService.GetByIdAsync(Id);
+        try
+        {
+            await YouthService.UnarchiveAsync(Id);
+            youth = await YouthService.GetByIdAsync(Id);
+            Toasts.ShowSuccess($"{youth?.FullName} restored");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Restoring youth {YouthId} failed", Id);
+            Toasts.ShowError("Couldn't restore them. Please try again.");
+        }
     }
 }

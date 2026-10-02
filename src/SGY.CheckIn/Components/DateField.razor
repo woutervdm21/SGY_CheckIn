@@ -1,0 +1,135 @@
+@* A DD/MM/YYYY date box. A native <input type="date"> lays the date out however the
+   device's language says (MM/DD/YYYY on a US-English browser), and a page can't override
+   that. So the visible box is plain text in DD/MM/YYYY, and the calendar button is a
+   transparent native date input laid over the icon: tapping it opens the device's own
+   picker, which shows month names rather than a number order.
+
+   Inside an EditForm, bind it like InputDate (@bind-Value) and it reports a mistyped date
+   through the form's validation, so the page's <ValidationMessage> shows it and submit is
+   blocked. Outside a form it shows its own message. A mistyped date is never passed on. *@
+@using System.Globalization
+@using System.Linq.Expressions
+
+<div class="date-field">
+    <input type="text" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off"
+           class="@CssClass" value="@text" @onchange="OnTextChanged" />
+    <span class="date-field-picker">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M3 10h18M8 3v4M16 3v4" />
+        </svg>
+        <input type="date" tabindex="-1" aria-label="Pick a date from a calendar"
+               value="@(Value?.ToString("yyyy-MM-dd"))" @onchange="OnPickerChanged"
+               onclick="try { this.showPicker(); } catch { }" />
+    </span>
+</div>
+@if (invalid && store is null)
+{
+    <div class="validation-message">@InvalidMessage</div>
+}
+
+@code {
+    private const string InvalidMessage = "Enter the date as DD/MM/YYYY";
+
+    // Typed with or without separators: phone number pads often have no "/" key.
+    private static readonly string[] Formats = ["d/M/yyyy", "d-M-yyyy", "d.M.yyyy", "d M yyyy", "ddMMyyyy"];
+
+    [CascadingParameter]
+    private EditContext? EditContext { get; set; }
+
+    [Parameter]
+    public DateOnly? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<DateOnly?> ValueChanged { get; set; }
+
+    [Parameter]
+    public Expression<Func<DateOnly?>>? ValueExpression { get; set; }
+
+    private string text = "";
+    private DateOnly? shownValue;
+    private bool invalid;
+
+    private EditContext? storeContext;
+    private ValidationMessageStore? store;
+    private FieldIdentifier fieldId;
+
+    private string CssClass =>
+        store is not null ? EditContext!.FieldCssClass(fieldId) : invalid ? "invalid" : "";
+
+    protected override void OnParametersSet()
+    {
+        // EditForm makes a new EditContext whenever its model is swapped (EditYouth does
+        // once the youth loads), so follow it rather than only setting up once.
+        if (EditContext is not null && ValueExpression is not null && EditContext != storeContext)
+        {
+            storeContext = EditContext;
+            store = new ValidationMessageStore(EditContext);
+            fieldId = FieldIdentifier.Create(ValueExpression);
+        }
+
+        // Only reformat when the value really changed (e.g. a dashboard preset), so a
+        // half-fixed typo isn't wiped by an unrelated re-render. (Blazor skips this call
+        // entirely when no parameter changed; a page that needs to wipe a typo regardless
+        // can give the field a new @key.)
+        if (Value != shownValue)
+        {
+            shownValue = Value;
+            text = Format(Value);
+            invalid = false;
+            store?.Clear(fieldId);
+        }
+    }
+
+    private async Task OnTextChanged(ChangeEventArgs e)
+    {
+        text = e.Value?.ToString() ?? "";
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            await SetAsync(null);
+        }
+        else if (DateOnly.TryParseExact(text.Trim(), Formats, CultureInfo.InvariantCulture,
+                     DateTimeStyles.AllowWhiteSpaces, out var date))
+        {
+            await SetAsync(date);
+        }
+        else
+        {
+            invalid = true;
+            if (store is not null)
+            {
+                store.Clear(fieldId);
+                store.Add(fieldId, InvalidMessage);
+                EditContext!.NotifyValidationStateChanged();
+            }
+        }
+    }
+
+    private async Task OnPickerChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var date))
+        {
+            await SetAsync(date);
+        }
+    }
+
+    private async Task SetAsync(DateOnly? value)
+    {
+        invalid = false;
+        shownValue = value;
+        text = Format(value);
+        store?.Clear(fieldId);
+
+        await ValueChanged.InvokeAsync(value);
+        if (store is not null)
+        {
+            EditContext!.NotifyFieldChanged(fieldId);
+        }
+    }
+
+    private static string Format(DateOnly? value) =>
+        value?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "";
+}

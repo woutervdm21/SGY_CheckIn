@@ -15,18 +15,22 @@ There are two passwords. The password someone types decides what they can do.
 
 **Volunteer** (most helpers use this one):
 
-- check youth in
+- check youth in, after confirming their details and their parent's details with them
+- undo a check-in made by mistake
 - register new youth
-- fix a youth's details from the check-in log
+- fix a youth's details from the check-in screen or the check-in log
+- set the Care Village tick and the comment in the leaders' notes
 
 **Admin** (youth leaders):
 
 - everything a volunteer can do
 - manage all profiles on the **Profiles** page: search, edit, archive and restore
-- set the leaders' notes on a profile
+- set a youth's status to *Trouble maker*
 - see the **Dashboard**
+- change the volunteer password on the **Settings** page
 
-Everyone signs in on the same screen.
+Everyone signs in on the same screen. First choose a group: **Kids**, **Youth** or **Young
+Adults**. Only Youth is built so far. Kids and Young Adults show "Under development" for now.
 
 ## Leaders' notes on a profile
 
@@ -36,9 +40,10 @@ Near the bottom of each youth's details there is a **Leaders' notes** section:
 - **Care Village.** A separate tick box. A youth can be a trouble maker and in Care Village
   at the same time.
 - **Comment.** Free text for anything leaders should know, such as allergies, pastoral notes,
-  or why someone is flagged.
+  or anything else that helps on the night.
 
-Only admins can change these. Volunteers can read them but cannot edit them.
+Anyone can tick Care Village and edit the comment. Only admins can change the status.
+Volunteers can see the status but cannot change it.
 
 A flagged youth shows a small coloured dot next to their name in the check-in search. Red
 means trouble maker. Amber means Care Village. The dot does not say why. The reason is on the
@@ -63,29 +68,41 @@ It shows:
 - **Haven't come in this period.** Youth still on the books who did not come. It shows when
   each was last seen, or "Never checked in". The longest absences are first. Click a name to
   open their profile.
-- **Export CSV.** A spreadsheet file with one line per arrival, for the church office.
+- **Export data.** Opens the Export page (see below).
+
+## Export data (admins only)
+
+Open **Export data** from the Dashboard. There are two spreadsheet (CSV) downloads, each with
+every detail on file. Choose what to include, check the number of rows it shows, then press
+**Download CSV**.
+
+- **Check-in history.** One line per arrival, with the youth's full details. Filter by dates,
+  grade, and whether to include archived youth.
+- **Youth list.** One line per youth, with their details, leaders' notes, total check-ins, and
+  first and last check-in. Filter by active or archived, grade, and leaders' notes (trouble
+  makers or Care Village).
+
+Dates in the files are written as year-month-day (2026-10-02), so every spreadsheet reads them
+the same way. The files include leaders' notes about children, so keep them private and delete
+them when you are done.
 
 ## Setting it up
 
 You need Docker on the computer that will run the app. Docker is free software that runs the
 app in its own little box, so you do not have to install anything else.
 
-**1. Set the two passwords.** Nobody can sign in until you do this.
+**1. Set the admin password.** Nobody can sign in until you do this.
 
-Run these two commands, using your own passwords:
+Run this command, using your own password:
 
 ```
-docker compose run --rm sgy-checkin --hash-password "YourVolunteerPassword"
 docker compose run --rm sgy-checkin --hash-password "YourAdminPassword"
 ```
 
-Each command prints a long code. Open the file `docker-compose.yml` and paste the codes in:
+It prints a long code. Open the file `docker-compose.yml` and paste the code in after
+`CheckInAuth__AdminPasswordHash:`. Keep the quote marks around it.
 
-- the volunteer code goes after `CheckInAuth__VolunteerPasswordHash:`
-- the admin code goes after `CheckInAuth__AdminPasswordHash:`
-
-Keep the quote marks around each code. You can leave one blank to switch that level off, but
-you will usually want both.
+You set the volunteer password later, from inside the app (step 5).
 
 **2. Check the time zone.** In `docker-compose.yml` you will see `TZ: Africa/Johannesburg`.
 Change it only if your church is not in South Africa. This keeps check-in times and "today"
@@ -106,6 +123,9 @@ http://<the computer's address>:8080
 To find the address, run `ipconfig` on that computer (or `ip addr` on Linux) and look for the
 IPv4 address. It usually looks like `192.168.0.50`.
 
+**5. Set the volunteer password.** Sign in with the admin password, open **Settings**, and
+type the volunteer password. Volunteers cannot sign in until you do this.
+
 ## Giving it an easy web address
 
 Typing an address like `192.168.0.50:8080` is easy to get wrong. Whoever looks after the
@@ -117,8 +137,13 @@ for them explains how.
 - **Stop it:** `docker compose down`. Your data is safe. It is not kept inside the app.
 - **Start it again:** `docker compose up -d`
 - **Update it after a change:** `docker compose up -d --build`
-- **Change a password:** do step 1 again with the new password, paste in the new code, then
-  run `docker compose up -d`.
+- **Change the volunteer password:** sign in as an admin and open **Settings**. Every device
+  signed in as a volunteer is signed out and needs the new password.
+- **Change the admin password:** do step 1 again with the new password, paste in the new
+  code, then run `docker compose up -d`.
+- **Updating from an older version:** if your `docker-compose.yml` still has a
+  `CheckInAuth__VolunteerPasswordHash` line, the app copies that volunteer password across
+  the first time it starts. After that you can delete the line. Changes to it do nothing.
 
 ## Where the data lives
 

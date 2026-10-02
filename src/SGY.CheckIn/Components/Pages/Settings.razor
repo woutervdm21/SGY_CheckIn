@@ -1,0 +1,84 @@
+@page "/admin/settings"
+@attribute [Authorize(Roles = Roles.Admin)]
+@using System.ComponentModel.DataAnnotations
+@inject VolunteerPasswordStore VolunteerPasswords
+@inject ToastService Toasts
+@inject ILogger<Settings> Logger
+
+<PageTitle>Settings — SGY Check-In</PageTitle>
+
+<div class="register-page">
+    <h1>Settings</h1>
+
+    <EditForm Model="form" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="ShowFixFieldsError" FormName="volunteer-password">
+        <DataAnnotationsValidator />
+
+        <fieldset>
+            <legend>Volunteer password</legend>
+
+            @if (!VolunteerPasswords.IsSet)
+            {
+                <p class="field-hint">No volunteer password is set yet, so volunteers can't sign in.</p>
+            }
+
+            <label class="field">
+                <span class="field-label">New password</span>
+                <InputText @bind-Value="form.NewPassword" type="password" autocomplete="new-password" />
+                <ValidationMessage For="() => form.NewPassword" />
+            </label>
+
+            <label class="field">
+                <span class="field-label">Type it again</span>
+                <InputText @bind-Value="form.ConfirmPassword" type="password" autocomplete="new-password" />
+                <ValidationMessage For="() => form.ConfirmPassword" />
+            </label>
+
+            <p class="field-hint">
+                Every device signed in as a volunteer will be signed out and need the new password.
+            </p>
+        </fieldset>
+
+        <div class="form-actions">
+            <button type="submit" class="submit-button" disabled="@isSubmitting">Change password</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private PasswordForm form = new();
+    private bool isSubmitting;
+
+    private async Task HandleValidSubmit()
+    {
+        isSubmitting = true;
+        try
+        {
+            await VolunteerPasswords.SetAsync(form.NewPassword);
+            form = new();
+            Toasts.ShowSuccess("Volunteer password changed. Volunteer devices need the new password.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Changing the volunteer password failed");
+            Toasts.ShowError("Couldn't change the password. The old one still works. Please try again.");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ShowFixFieldsError() =>
+        Toasts.ShowError("Password not changed. Fix the fields marked in red.");
+
+    private sealed class PasswordForm
+    {
+        [Required(ErrorMessage = "Enter a new password")]
+        [MinLength(6, ErrorMessage = "Use at least 6 characters")]
+        [StringLength(100)]
+        public string NewPassword { get; set; } = "";
+
+        [Compare(nameof(NewPassword), ErrorMessage = "The two passwords don't match")]
+        public string ConfirmPassword { get; set; } = "";
+    }
+}

@@ -11,10 +11,9 @@ services:
       # display check-in times. Defaults to South Africa time — change to your church's
       # IANA time zone name if different (see README).
       TZ: Africa/Johannesburg
-      # Two shared passwords, one per role. Paste the hashes from the --hash-password
-      # command (see README). A blank hash disables that role's login (fails closed).
-      # Volunteers can check in / register; admins can also manage youth profiles.
-      CheckInAuth__VolunteerPasswordHash: ""
+      # The admin password. Paste the hash from the --hash-password command (see README).
+      # A blank hash disables admin login (fails closed). The volunteer password is not
+      # set here: an admin sets it on the Settings page.
       CheckInAuth__AdminPasswordHash: ""
     restart: unless-stopped
 

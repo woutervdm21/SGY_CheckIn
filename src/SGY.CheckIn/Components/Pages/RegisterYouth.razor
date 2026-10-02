@@ -3,6 +3,8 @@
 @inject YouthService YouthService
 @inject CheckInService CheckInService
 @inject NavigationManager Navigation
+@inject ToastService Toasts
+@inject ILogger<RegisterYouth> Logger
 
 <PageTitle>Register — SGY Check-In</PageTitle>
 
@@ -21,7 +23,7 @@
         </div>
     }
 
-    <EditForm Model="form" OnValidSubmit="HandleValidSubmit" FormName="register-youth">
+    <EditForm Model="form" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="ShowFixFieldsError" FormName="register-youth">
         <DataAnnotationsValidator />
 
         <fieldset>
@@ -59,7 +61,7 @@
 
             <label class="field">
                 <span class="field-label">Date of birth</span>
-                <InputDate @bind-Value="form.DateOfBirth" />
+                <DateField @bind-Value="form.DateOfBirth" />
                 <ValidationMessage For="() => form.DateOfBirth" />
             </label>
         </fieldset>
@@ -92,13 +94,13 @@
             </label>
         </fieldset>
 
-        @* Admin-only, same as on the edit page: a volunteer registering a youth just gets
-           the default green status and no comment. *@
-        @if (isAdmin)
-        {
-            <fieldset>
-                <legend>Leaders' notes</legend>
+        @* The status is admin-only, same as on the edit page: a volunteer registering a
+           youth just gets the default green status. *@
+        <fieldset>
+            <legend>Leaders' notes</legend>
 
+            @if (isAdmin)
+            {
                 <label class="field">
                     <span class="field-label">Status</span>
                     <InputSelect @bind-Value="form.BehaviourStatus">
@@ -108,21 +110,21 @@
                         }
                     </InputSelect>
                 </label>
+            }
 
-                @* Independent of the status above — a youth can be both. *@
-                <label class="checkbox-field">
-                    <InputCheckbox @bind-Value="form.InCareVillage" />
-                    <span>Care Village</span>
-                </label>
+            @* Independent of the status above — a youth can be both. *@
+            <label class="checkbox-field">
+                <InputCheckbox @bind-Value="form.InCareVillage" />
+                <span>Care Village</span>
+            </label>
 
-                <label class="field">
-                    <span class="field-label">Comment <span class="optional">(optional)</span></span>
-                    <InputTextArea @bind-Value="form.Comment" rows="4"
-                                   placeholder="Anything leaders should know — allergies, pastoral notes, why they're flagged." />
-                    <ValidationMessage For="() => form.Comment" />
-                </label>
-            </fieldset>
-        }
+            <label class="field">
+                <span class="field-label">Comment <span class="optional">(optional)</span></span>
+                <InputTextArea @bind-Value="form.Comment" rows="4"
+                               placeholder="Anything leaders should know — allergies, pastoral notes." />
+                <ValidationMessage For="() => form.Comment" />
+            </label>
+        </fieldset>
 
         <div class="form-actions">
             <a href="/" class="btn-cancel">Cancel</a>
@@ -147,7 +149,7 @@
     private List<Youth> similarMatches = [];
     private bool isSubmitting;
     private bool checkInAfter = true;   // set by whichever submit button was pressed
-    private bool sameSurname = true;    // parent shares the child's surname (the common case)
+    private bool sameSurname;           // ticked by the volunteer when the parent shares the child's surname
     private CancellationTokenSource? similarCts;
 
     protected override async Task OnInitializedAsync()
@@ -209,16 +211,41 @@
     private async Task HandleValidSubmit()
     {
         isSubmitting = true;
-        // Re-read the role at submit time rather than trusting the field set during render.
-        var youth = await YouthService.CreateAsync(form, await IsAdminAsync());
-        if (checkInAfter)
+        Youth youth;
+        try
         {
-            await CheckInService.CheckInAsync(youth.Id);
-            Navigation.NavigateTo($"/?welcome={Uri.EscapeDataString(youth.FullName)}");
+            // Re-read the role at submit time rather than trusting the field set during render.
+            youth = await YouthService.CreateAsync(form, await IsAdminAsync());
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Registering a youth failed");
+            Toasts.ShowError("Couldn't register them. Please try again.");
+            isSubmitting = false;
+            return;
+        }
+
+        if (!checkInAfter)
+        {
+            Toasts.ShowSuccess($"{youth.FullName} registered (not checked in yet)");
         }
         else
         {
-            Navigation.NavigateTo($"/?added={Uri.EscapeDataString(youth.FullName)}");
+            try
+            {
+                await CheckInService.CheckInAsync(youth.Id);
+                Toasts.ShowSuccess($"{youth.FullName} registered and checked in");
+            }
+            catch (Exception ex)
+            {
+                // They're saved, so don't send the volunteer back to register them twice.
+                Logger.LogError(ex, "Checking in newly registered youth {YouthId} failed", youth.Id);
+                Toasts.ShowError($"{youth.FullName} is registered, but the check-in failed. Search for them to check in.");
+            }
         }
+        Navigation.NavigateTo("/");
     }
+
+    private void ShowFixFieldsError() =>
+        Toasts.ShowError("Not registered yet. Fix the fields marked in red.");
 }

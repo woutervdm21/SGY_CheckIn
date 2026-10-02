@@ -1,41 +1,104 @@
 @page "/login"
 @attribute [AllowAnonymous]
 @layout Layout.LoginLayout
-@inject NavigationManager Navigation
 
-<PageTitle>Sign in — SGY Check-In</PageTitle>
+<PageTitle>Sign in — SG Check-In</PageTitle>
 
+@* Two steps: pick the group, then sign in. The app will serve Kids and Young Adults too;
+   for now only Youth is built, so the other two stop at an "under development" note.
+   The step lives in the query string (?group=), so Back and refresh behave, and
+   returnUrl is carried through every step. *@
 <div class="login-card">
-    <img src="sg-logo.avif" alt="SG Youth" class="login-logo" />
-    <h1>SGY Check-In</h1>
-    <p class="login-subtitle">Enter the staff password to continue</p>
+    <img src="sg-logo.avif" alt="SG" class="login-logo" />
+    <h1>SG Check-In</h1>
 
-    @if (HasError)
+    @if (SelectedGroup is null)
     {
-        <p class="login-error" role="alert">That password isn't right — try again.</p>
+        <p class="login-prompt">Choose a group</p>
+        <div class="group-choices">
+            @foreach (var group in Groups)
+            {
+                <a href="@StepUrl(group.Key)" class="group-choice @(group.Ready ? "" : "soon")">
+                    <span class="group-choice-name">@group.Name</span>
+                    @if (!group.Ready)
+                    {
+                        <span class="group-choice-note">Coming soon</span>
+                    }
+                </a>
+            }
+        </div>
     }
+    else if (!SelectedGroup.Ready)
+    {
+        <p class="login-group-chip">@SelectedGroup.Name</p>
+        <div class="under-development" role="status">
+            <p class="under-development-title">Under development</p>
+            <p>Check-in for @SelectedGroup.Name is still being built.</p>
+        </div>
+        <a href="@StepUrl(null)" class="login-back">← Back</a>
+    }
+    else
+    {
+        <p class="login-group-chip">@SelectedGroup.Name</p>
 
-    <form method="post" action="/account/login" class="login-form">
-        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
-        <input
-            type="password"
-            name="password"
-            placeholder="Staff password"
-            autofocus
-            autocomplete="current-password"
-            class="login-password-input" />
-        <button type="submit" class="login-submit">Sign in</button>
-    </form>
+        @if (HasError)
+        {
+            <p class="login-error" role="alert">That password isn't right — try again.</p>
+        }
+
+        <form method="post" action="/account/login" class="login-form">
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <input
+                type="password"
+                name="password"
+                placeholder="Enter Password"
+                autofocus
+                autocomplete="current-password"
+                class="login-password-input" />
+            <button type="submit" class="login-submit">Sign in</button>
+        </form>
+        <a href="@StepUrl(null)" class="login-back">← Choose a different group</a>
+    }
 
     <p class="login-version">v@(AppInfo.Version)</p>
 </div>
 
 @code {
+    private sealed record Group(string Key, string Name, bool Ready);
+
+    private static readonly Group[] Groups =
+    [
+        new("kids", "Kids", Ready: false),
+        new("youth", "Youth", Ready: true),
+        new("young-adults", "Young Adults", Ready: false),
+    ];
+
+    [SupplyParameterFromQuery(Name = "group")]
+    private string? GroupKey { get; set; }
+
     [SupplyParameterFromQuery(Name = "error")]
     private string? Error { get; set; }
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
     private string? ReturnUrl { get; set; }
 
+    // A failed sign-in comes back with ?error=1; that only happens from the Youth form.
+    private Group? SelectedGroup =>
+        Groups.FirstOrDefault(g => g.Key == (HasError ? GroupKey ?? "youth" : GroupKey));
+
     private bool HasError => Error == "1";
+
+    private string StepUrl(string? group)
+    {
+        var query = new List<string>();
+        if (group is not null)
+        {
+            query.Add($"group={group}");
+        }
+        if (!string.IsNullOrEmpty(ReturnUrl))
+        {
+            query.Add($"returnUrl={Uri.EscapeDataString(ReturnUrl)}");
+        }
+        return query.Count == 0 ? "/login" : $"/login?{string.Join('&', query)}";
+    }
 }

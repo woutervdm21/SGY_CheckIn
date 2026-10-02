@@ -41,17 +41,14 @@ public class YouthFormModel : IValidatableObject
     [StringLength(20)]
     public string ParentCellNo { get; set; } = "";
 
-    /// <summary>
-    /// Admin-only note. Volunteers can open the edit form, so whatever arrives here from a
-    /// volunteer's post is ignored — see <see cref="CopyTo"/>.
-    /// </summary>
+    /// <summary>Leaders' note. Anyone signed in can edit it.</summary>
     [StringLength(2000, ErrorMessage = "Comment can't be longer than 2000 characters")]
     public string? Comment { get; set; }
 
-    /// <summary>Admin-only behaviour flag; ignored from a volunteer's post like <see cref="Comment"/>.</summary>
+    /// <summary>Admin-only behaviour flag; ignored from a volunteer's post — see <see cref="CopyTo"/>.</summary>
     public BehaviourStatus BehaviourStatus { get; set; } = BehaviourStatus.Green;
 
-    /// <summary>Admin-only Care Village flag, independent of <see cref="BehaviourStatus"/>.</summary>
+    /// <summary>Care Village flag, independent of <see cref="BehaviourStatus"/>. Anyone signed in can edit it.</summary>
     public bool InCareVillage { get; set; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -74,13 +71,12 @@ public class YouthFormModel : IValidatableObject
         }
     }
 
-    /// <param name="includeAdminFields">
-    /// Whether to apply the admin-only fields (<see cref="Comment"/>,
-    /// <see cref="BehaviourStatus"/> and <see cref="InCareVillage"/>). False for a
-    /// volunteer: those fields are hidden from their form, and a hand-crafted post must
-    /// not be able to overwrite them.
+    /// <param name="includeBehaviourStatus">
+    /// Whether to apply the admin-only <see cref="BehaviourStatus"/>. False for a
+    /// volunteer: the input is hidden from their form, and a hand-crafted post must not be
+    /// able to overwrite it.
     /// </param>
-    public void CopyTo(Youth youth, bool includeAdminFields)
+    public void CopyTo(Youth youth, bool includeBehaviourStatus)
     {
         youth.Name = Name.Trim();
         youth.Surname = Surname.Trim();
@@ -91,12 +87,13 @@ public class YouthFormModel : IValidatableObject
         youth.ParentSurname = ParentSurname.Trim();
         youth.ParentCellNo = ParentCellNo.Trim();
 
-        if (includeAdminFields)
+        var comment = Comment?.Trim();
+        youth.Comment = string.IsNullOrEmpty(comment) ? null : comment;
+        youth.InCareVillage = InCareVillage;
+
+        if (includeBehaviourStatus)
         {
-            var comment = Comment?.Trim();
-            youth.Comment = string.IsNullOrEmpty(comment) ? null : comment;
             youth.BehaviourStatus = BehaviourStatus;
-            youth.InCareVillage = InCareVillage;
         }
     }
 

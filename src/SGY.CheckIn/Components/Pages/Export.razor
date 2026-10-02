@@ -1,0 +1,205 @@
+@page "/admin/export"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject ExportService Exports
+
+<PageTitle>Export data — SGY Check-In</PageTitle>
+
+@* Two downloads with their own filters. Each shows how many rows match before
+   downloading, and the link carries the filters in its query string, so the file
+   is exactly what the count describes. *@
+<div class="dashboard-page export-page">
+    <div>
+        <a href="/admin/dashboard" class="back-link">← Dashboard</a>
+        <h1>Export data</h1>
+        <p class="page-subtitle">Download a spreadsheet (CSV) with every detail on file. Pick what to include first.</p>
+    </div>
+
+    <section class="chart-card export-card">
+        <h2>Check-in history</h2>
+        <p class="field-hint">One line per arrival, with the youth's full details.</p>
+
+        <div class="export-filter">
+            <span class="field-label">Dates</span>
+            <div class="report-presets">
+                <button type="button" class="preset @(IsPreset(42) ? "active" : "")" @onclick="() => ApplyPreset(42)">Last 6 weeks</button>
+                <button type="button" class="preset @(IsPreset(84) ? "active" : "")" @onclick="() => ApplyPreset(84)">Last 12 weeks</button>
+                <button type="button" class="preset @(IsPreset(365) ? "active" : "")" @onclick="() => ApplyPreset(365)">Last year</button>
+            </div>
+            <div class="report-range">
+                <label class="field">
+                    <span class="field-label">From</span>
+                    <DateField @key="(presetCount, 0)" Value="from" ValueChanged="OnFromChanged" />
+                </label>
+                <label class="field">
+                    <span class="field-label">To</span>
+                    <DateField @key="(presetCount, 1)" Value="to" ValueChanged="OnToChanged" />
+                </label>
+            </div>
+        </div>
+
+        <div class="export-filter">
+            <span class="field-label">Grades</span>
+            <GradePicker Selected="historyGrades" SelectedChanged="OnHistoryGradesChanged" />
+            <p class="field-hint">Grade is the youth's grade now, not when they checked in.</p>
+        </div>
+
+        <label class="checkbox-field">
+            <input type="checkbox" checked="@includeArchived" @onchange="OnIncludeArchivedChanged" />
+            <span>Include archived youth</span>
+        </label>
+
+        <div class="export-download">
+            <span class="export-count">@Plural(historyCount, "check-in")</span>
+            <a class="submit-button export-button @(historyCount == 0 ? "disabled" : "")"
+               href="@($"/admin/export/checkins.csv?{HistoryFilter.ToQuery()}")" download
+               aria-disabled="@(historyCount == 0)">Download CSV</a>
+        </div>
+    </section>
+
+    <section class="chart-card export-card">
+        <h2>Youth list</h2>
+        <p class="field-hint">One line per youth: every detail, leaders' notes, and their check-in totals.</p>
+
+        <div class="export-filter">
+            <span class="field-label">Who</span>
+            <div class="report-presets">
+                @foreach (var (value, label) in ScopeOptions)
+                {
+                    <button type="button" class="preset @(scope == value ? "active" : "")" @onclick="() => SetScope(value)">@label</button>
+                }
+            </div>
+        </div>
+
+        <div class="export-filter">
+            <span class="field-label">Grades</span>
+            <GradePicker Selected="youthGrades" SelectedChanged="OnYouthGradesChanged" />
+        </div>
+
+        <div class="export-filter">
+            <span class="field-label">Leaders' notes</span>
+            <div class="report-presets">
+                @foreach (var (value, label) in NotesOptions)
+                {
+                    <button type="button" class="preset @(notes == value ? "active" : "")" @onclick="() => SetNotes(value)">@label</button>
+                }
+            </div>
+        </div>
+
+        <div class="export-download">
+            <span class="export-count">@Plural(youthCount, "youth", "youth")</span>
+            <a class="submit-button export-button @(youthCount == 0 ? "disabled" : "")"
+               href="@($"/admin/export/youth.csv?{YouthFilter.ToQuery()}")" download
+               aria-disabled="@(youthCount == 0)">Download CSV</a>
+        </div>
+    </section>
+
+    <p class="field-hint">
+        These files include leaders' notes about children. Keep them somewhere private and
+        delete them when you're done.
+    </p>
+</div>
+
+@code {
+    private static readonly (YouthListScope Value, string Label)[] ScopeOptions =
+    [
+        (YouthListScope.Active, "Active"),
+        (YouthListScope.Archived, "Archived"),
+        (YouthListScope.All, "Everyone"),
+    ];
+
+    private static readonly (NotesFilter Value, string Label)[] NotesOptions =
+    [
+        (NotesFilter.Everyone, "Everyone"),
+        (NotesFilter.TroubleMakers, "Trouble makers"),
+        (NotesFilter.CareVillage, "Care Village"),
+    ];
+
+    // Check-in history filters.
+    private DateOnly from = DateOnly.FromDateTime(DateTime.Today).AddDays(-84);
+    private DateOnly to = DateOnly.FromDateTime(DateTime.Today);
+    private int presetCount;
+    private IReadOnlySet<Grade> historyGrades = new HashSet<Grade>();
+    private bool includeArchived = true;
+    private int historyCount;
+
+    // Youth list filters.
+    private YouthListScope scope = YouthListScope.Active;
+    private IReadOnlySet<Grade> youthGrades = new HashSet<Grade>();
+    private NotesFilter notes = NotesFilter.Everyone;
+    private int youthCount;
+
+    private CheckInExportFilter HistoryFilter => new(from, to, historyGrades, includeArchived);
+    private YouthExportFilter YouthFilter => new(scope, youthGrades, notes);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CountHistoryAsync();
+        await CountYouthAsync();
+    }
+
+    private async Task CountHistoryAsync() => historyCount = await Exports.CountCheckInsAsync(HistoryFilter);
+
+    private async Task CountYouthAsync() => youthCount = await Exports.CountYouthAsync(YouthFilter);
+
+    private async Task OnFromChanged(DateOnly? value)
+    {
+        if (value is { } date)
+        {
+            from = date;
+            await CountHistoryAsync();
+        }
+    }
+
+    private async Task OnToChanged(DateOnly? value)
+    {
+        if (value is { } date)
+        {
+            to = date;
+            await CountHistoryAsync();
+        }
+    }
+
+    private async Task ApplyPreset(int days)
+    {
+        presetCount++;
+        to = DateOnly.FromDateTime(DateTime.Today);
+        from = to.AddDays(-days);
+        await CountHistoryAsync();
+    }
+
+    private bool IsPreset(int days) =>
+        to == DateOnly.FromDateTime(DateTime.Today) && from == to.AddDays(-days);
+
+    private async Task OnHistoryGradesChanged(IReadOnlySet<Grade> grades)
+    {
+        historyGrades = grades;
+        await CountHistoryAsync();
+    }
+
+    private async Task OnIncludeArchivedChanged(ChangeEventArgs e)
+    {
+        includeArchived = e.Value is true;
+        await CountHistoryAsync();
+    }
+
+    private async Task SetScope(YouthListScope value)
+    {
+        scope = value;
+        await CountYouthAsync();
+    }
+
+    private async Task OnYouthGradesChanged(IReadOnlySet<Grade> grades)
+    {
+        youthGrades = grades;
+        await CountYouthAsync();
+    }
+
+    private async Task SetNotes(NotesFilter value)
+    {
+        notes = value;
+        await CountYouthAsync();
+    }
+
+    private static string Plural(int count, string one, string? many = null) =>
+        $"{count} {(count == 1 ? one : many ?? one + "s")}";
+}
