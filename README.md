@@ -154,7 +154,8 @@ All the youth details and check-ins are kept in a storage area Docker looks afte
 
 Once a week the app saves a full copy of the database by itself. It needs no setup. Each copy
 has everything: every youth, every check-in since the app was first used, leaders' notes, and
-settings including the volunteer password. The app keeps the last 12 copies, about three months.
+settings including the volunteer password. The app keeps the 12 newest copies (about three
+months) and deletes older ones. Nothing is lost, because each copy has everything.
 
 Because church computers are often switched off at night, the app does not wait for a set time.
 A few minutes after it starts, and then every hour while it runs, it checks the newest copy. If
