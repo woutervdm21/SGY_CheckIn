@@ -15,6 +15,12 @@ services:
       # A blank hash disables admin login (fails closed). The volunteer password is not
       # set here: an admin sets it on the Settings page.
       CheckInAuth__AdminPasswordHash: ""
+      # Backups: a full copy of the database once a week, keeping the last 12, saved in
+      # the data storage area (/data/backups). To keep them in a folder on this computer
+      # instead (one that syncs to OneDrive, say), add a line under volumes: like
+      #   - C:/Users/Church/OneDrive/SG-Backups:/backups
+      # and uncomment this:
+      # Backup__Directory: /backups
     restart: unless-stopped
 
 volumes:

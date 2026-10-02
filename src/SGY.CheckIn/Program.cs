@@ -39,6 +39,9 @@ builder.Services.AddScoped<YouthService>();
 builder.Services.AddScoped<CheckInService>();
 builder.Services.AddScoped<ReportingService>();
 builder.Services.AddScoped<ExportService>();
+builder.Services.AddSingleton(sp => new BackupService(
+    connectionString, sp.GetRequiredService<IConfiguration>(), sp.GetRequiredService<ILogger<BackupService>>()));
+builder.Services.AddHostedService<AutomaticBackupService>();
 builder.Services.AddScoped<ToastService>();
 builder.Services.AddSingleton<VolunteerPasswordStore>();
 
@@ -96,6 +99,10 @@ if (!string.IsNullOrEmpty(keyPath))
 }
 
 var app = builder.Build();
+
+// A backup left as "restore.db" next to the database is swapped in before anything opens
+// it (README: Restoring a backup). Then migrations bring an older backup up to date.
+await app.Services.GetRequiredService<BackupService>().ApplyPendingRestoreAsync();
 
 // Apply any pending EF Core migrations on startup so the SQLite file/schema
 // self-initializes on first run — no manual migration step for church volunteers.
@@ -202,5 +209,13 @@ app.MapGet("/admin/export/youth.csv", async (HttpContext http, ExportService exp
     var fileName = $"sgy-youth-{DateTime.Today:yyyy-MM-dd}.csv";
     return Results.File(await exports.YouthListCsvAsync(filter, ct), "text/csv", fileName);
 }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+
+// Saved backups, downloaded from the Settings page. BackupService.PathOf only accepts its
+// own file names, so the name from the URL can't reach anything else on disk.
+app.MapGet("/admin/backups/{name}", (string name, BackupService backups) =>
+    backups.PathOf(name) is { } path
+        ? Results.File(path, "application/octet-stream", name)
+        : Results.NotFound()
+).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
 
 app.Run();

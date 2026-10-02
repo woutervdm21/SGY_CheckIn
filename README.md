@@ -150,8 +150,42 @@ for them explains how.
 All the youth details and check-ins are kept in a storage area Docker looks after, called
 `sgy_checkin_data`. It stays put when you stop, start or update the app.
 
-For backups, ask whoever looks after Docker at the church to copy that storage area somewhere
-safe now and then.
+## Backups
+
+Once a week the app saves a full copy of the database by itself. It needs no setup. Each copy
+has everything: every youth, every check-in since the app was first used, leaders' notes, and
+settings including the volunteer password. The app keeps the last 12 copies, about three months.
+
+Because church computers are often switched off at night, the app does not wait for a set time.
+A few minutes after it starts, and then every hour while it runs, it checks the newest copy. If
+that copy is a week old, it makes a new one. A Friday night is enough to keep it up to date.
+
+The copies are saved on the same computer as the app, so they do not help if that computer's
+disk fails. **Now and then, an admin should download one and keep it somewhere else**, such as a
+USB stick or the church Drive:
+
+1. Sign in as an admin and open **Settings**.
+2. Under **Backups**, press **Back up now**.
+3. Press **Download** next to the newest backup.
+
+Settings also shows when the last backup was made, and warns you if it failed or is overdue.
+
+To save the weekly copies straight into a folder that syncs to OneDrive or Google Drive, follow
+the note about backups in `docker-compose.yml`.
+
+### Restoring a backup
+
+This puts every record back as it was when the backup was made. The app saves a copy of the
+current data first, so a restore can itself be undone from the backup list.
+
+1. Download the backup you want from **Settings** and put it in the same folder as
+   `docker-compose.yml`. Rename it `restore.db`.
+2. Stop the app: `docker compose stop`
+3. Copy the file into the app's storage: `docker cp restore.db sgy-checkin:/data/restore.db`
+4. Start the app: `docker compose start`
+
+When the app starts, it notices `restore.db`, swaps it in, and deletes it. Sign in and check the
+data is back, then delete your own `restore.db`.
 
 ## Running it on your own computer to make changes
 

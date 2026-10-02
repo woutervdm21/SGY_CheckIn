@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = Roles.Admin)]
 @using System.ComponentModel.DataAnnotations
 @inject VolunteerPasswordStore VolunteerPasswords
+@inject BackupService Backups
 @inject ToastService Toasts
 @inject ILogger<Settings> Logger
 
@@ -42,11 +43,67 @@
             <button type="submit" class="submit-button" disabled="@isSubmitting">Change password</button>
         </div>
     </EditForm>
+
+    @* Backups are full copies of everything, made automatically once a week. The list
+       is the way to get one off this computer: download it to a USB stick or the church
+       Drive, since a backup on the same disk doesn't survive that disk failing. *@
+    <fieldset>
+        <legend>Backups</legend>
+
+        <p class="field-hint">
+            Once a week the app saves a full copy of everything: every youth, check-in, leaders'
+            note and setting. It keeps the last @Backups.Keep. Download one now and then and keep
+            it somewhere safe, like a USB stick or the church Drive.
+        </p>
+
+        @if (Backups.LastError is { } error)
+        {
+            <p class="backup-status problem" role="alert">The last backup failed: @error</p>
+        }
+        else if (backups.Count == 0)
+        {
+            <p class="backup-status problem">No backups yet. The first one is made a few minutes after the app starts, or press Back up now.</p>
+        }
+        else if (DateTime.Now - backups[0].CreatedLocal > Backups.Interval + TimeSpan.FromDays(7))
+        {
+            <p class="backup-status problem">The newest backup is from @DaysAgo(backups[0].CreatedLocal). Press Back up now.</p>
+        }
+        else
+        {
+            <p class="backup-status ok">Last backup: @backups[0].CreatedLocal.ToString("dd/MM/yyyy HH:mm") (@DaysAgo(backups[0].CreatedLocal))</p>
+        }
+
+        <div>
+            <button type="button" class="submit-button backup-now" disabled="@isBackingUp" @onclick="BackUpNow">
+                @(isBackingUp ? "Backing up…" : "Back up now")
+            </button>
+        </div>
+
+        @if (backups.Count > 0)
+        {
+            <ul class="backup-list">
+                @foreach (var backup in backups)
+                {
+                    <li>
+                        <span class="backup-date">@backup.CreatedLocal.ToString("dd/MM/yyyy HH:mm")</span>
+                        <span class="backup-size">@FormatSize(backup.SizeBytes)</span>
+                        <a href="@($"/admin/backups/{backup.Name}")" download>Download</a>
+                    </li>
+                }
+            </ul>
+        }
+
+        <p class="field-hint">Saved on the app's computer in <code>@Backups.Folder</code>. The README explains how to restore one.</p>
+    </fieldset>
 </div>
 
 @code {
     private PasswordForm form = new();
     private bool isSubmitting;
+    private IReadOnlyList<BackupFile> backups = [];
+    private bool isBackingUp;
+
+    protected override void OnInitialized() => backups = Backups.List();
 
     private async Task HandleValidSubmit()
     {
@@ -70,6 +127,40 @@
 
     private void ShowFixFieldsError() =>
         Toasts.ShowError("Password not changed. Fix the fields marked in red.");
+
+    private async Task BackUpNow()
+    {
+        isBackingUp = true;
+        try
+        {
+            await Backups.CreateBackupAsync();
+            Toasts.ShowSuccess("Backup saved. Download it from the list below to keep a copy.");
+        }
+        catch (Exception ex)
+        {
+            // BackupService has logged it, and LastError shows the reason above.
+            Toasts.ShowError($"Backup failed: {ex.Message}");
+        }
+        finally
+        {
+            isBackingUp = false;
+            backups = Backups.List();
+        }
+    }
+
+    private static string DaysAgo(DateTime when)
+    {
+        var days = (int)(DateTime.Now - when).TotalDays;
+        return days switch
+        {
+            0 => "today",
+            1 => "1 day ago",
+            _ => $"{days} days ago",
+        };
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes < 1024 * 1024 ? $"{Math.Max(1, bytes / 1024)} KB" : $"{bytes / (1024.0 * 1024):0.0} MB";
 
     private sealed class PasswordForm
     {

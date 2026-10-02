@@ -9,6 +9,8 @@ obj/
 *.db
 *.db-shm
 *.db-wal
+*.db.tmp
+backups/
 
 # Local dev / IDE
 .vs/

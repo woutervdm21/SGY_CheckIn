@@ -1820,6 +1820,66 @@ input[type=checkbox] {
     white-space: pre-wrap;
 }
 
+/* Settings: backups. */
+.backup-status {
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+}
+
+    .backup-status.ok {
+        color: var(--success);
+        background: var(--success-bg);
+    }
+
+    .backup-status.problem {
+        color: var(--warning);
+        background: var(--warning-bg);
+    }
+
+.backup-now {
+    padding: 12px 22px;
+}
+
+.backup-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+    .backup-list li {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: 10px 14px;
+    }
+
+        .backup-list li + li {
+            border-top: 1px solid var(--border);
+        }
+
+    .backup-list a {
+        margin-left: auto;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+.backup-date {
+    font-weight: 600;
+}
+
+.backup-size {
+    color: var(--text-faint);
+    font-size: 0.85rem;
+}
+
+.field-hint code {
+    overflow-wrap: anywhere;
+}
+
 .field-hint {
     margin: 0;
     color: var(--text-faint);
