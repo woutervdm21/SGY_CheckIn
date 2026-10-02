@@ -20,6 +20,35 @@ public class CheckInService(IDbContextFactory<AppDbContext> dbFactory)
         return record;
     }
 
+    /// <summary>
+    /// Removes this youth's check-ins for today (normally just one): the "Undo check-in" on
+    /// the check-in screen, for a youth checked in by mistake. Returns how many were removed.
+    /// </summary>
+    public async Task<int> UndoTodayCheckInAsync(int youthId, CancellationToken ct = default)
+    {
+        var (utcStart, utcEnd) = LocalDayRangeUtc(DateOnly.FromDateTime(DateTime.Now));
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.CheckIns
+            .Where(c => c.YouthId == youthId && c.Timestamp >= utcStart && c.Timestamp < utcEnd)
+            .ExecuteDeleteAsync(ct);
+    }
+
+    /// <summary>
+    /// Removes one check-in from the log. Unless <paramref name="allowPastDays"/> (admins),
+    /// only today's can go, so a volunteer browsing an old date can't rewrite the history
+    /// the dashboard reports on. Returns false if nothing was removed.
+    /// </summary>
+    public async Task<bool> UndoCheckInAsync(int checkInId, bool allowPastDays, CancellationToken ct = default)
+    {
+        var (utcStart, utcEnd) = LocalDayRangeUtc(DateOnly.FromDateTime(DateTime.Now));
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var removed = await db.CheckIns
+            .Where(c => c.Id == checkInId)
+            .Where(c => allowPastDays || (c.Timestamp >= utcStart && c.Timestamp < utcEnd))
+            .ExecuteDeleteAsync(ct);
+        return removed > 0;
+    }
+
     /// <summary>The most recent check-in for this youth today, if any — used to show
     /// an "already checked in" indicator without hard-blocking a re-check-in.</summary>
     public async Task<CheckInRecord?> GetTodayCheckInAsync(int youthId, CancellationToken ct = default)

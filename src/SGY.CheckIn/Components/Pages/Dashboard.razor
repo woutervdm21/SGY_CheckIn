@@ -6,7 +6,10 @@
 <PageTitle>Dashboard — SGY Check-In</PageTitle>
 
 <div class="dashboard-page">
-    <h1>Dashboard</h1>
+    <div class="dashboard-heading">
+        <h1>Dashboard</h1>
+        <a href="/admin/export" class="cancel-link">Export data</a>
+    </div>
 
     @* Filters sit in one row above the numbers they change, so it's always clear which
        period the figures below describe. *@
@@ -19,11 +22,11 @@
         <div class="report-range">
             <label class="field">
                 <span class="field-label">From</span>
-                <input type="date" value="@from.ToString("yyyy-MM-dd")" @onchange="OnFromChanged" />
+                <DateField @key="(presetCount, 0)" Value="from" ValueChanged="OnFromChanged" />
             </label>
             <label class="field">
                 <span class="field-label">To</span>
-                <input type="date" value="@to.ToString("yyyy-MM-dd")" @onchange="OnToChanged" />
+                <DateField @key="(presetCount, 1)" Value="to" ValueChanged="OnToChanged" />
             </label>
         </div>
     </div>
@@ -153,7 +156,7 @@
             <section class="chart-card">
                 <div class="table-head">
                     <h2>Every evening</h2>
-                    <a class="export-link" href="@CsvUrl">Export CSV</a>
+                    <a class="export-link" href="/admin/export">Export data</a>
                 </div>
                 <div class="table-scroll">
                     <table class="report-table">
@@ -188,6 +191,10 @@
 @code {
     private DateOnly from = DateOnly.FromDateTime(DateTime.Today).AddDays(-84);
     private DateOnly to = DateOnly.FromDateTime(DateTime.Today);
+
+    // Bumped by each preset to rebuild the date boxes, so a half-typed date in one is
+    // cleared even when the preset leaves that date unchanged (To is usually already today).
+    private int presetCount;
     private AttendanceReport? report;
     private int todayCount;
 
@@ -199,18 +206,18 @@
 
     private async Task Load() => report = await Reporting.GetAttendanceAsync(from, to);
 
-    private async Task OnFromChanged(ChangeEventArgs e)
+    private async Task OnFromChanged(DateOnly? value)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var parsed))
+        if (value is { } parsed)
         {
             from = parsed;
             await Load();
         }
     }
 
-    private async Task OnToChanged(ChangeEventArgs e)
+    private async Task OnToChanged(DateOnly? value)
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var parsed))
+        if (value is { } parsed)
         {
             to = parsed;
             await Load();
@@ -219,6 +226,7 @@
 
     private async Task ApplyPreset(int days)
     {
+        presetCount++;
         to = DateOnly.FromDateTime(DateTime.Today);
         from = to.AddDays(-days);
         await Load();
@@ -228,8 +236,6 @@
         to == DateOnly.FromDateTime(DateTime.Today) && from == to.AddDays(-days);
 
     private string PeriodLabel => $"{from:d MMM yyyy} – {to:d MMM yyyy}";
-
-    private string CsvUrl => $"/admin/reports/checkins.csv?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}";
 
     private string ChartAriaLabel =>
         report is null || report.SessionCount == 0

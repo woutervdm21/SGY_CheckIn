@@ -1,0 +1,41 @@
+@* Shows ToastService's pop-ups along the bottom of the screen. Lives in MainLayout so a
+   toast stays up across navigation (e.g. "Registered" after leaving the register page). *@
+@implements IDisposable
+@inject ToastService Toasts
+
+<div class="toast-stack" aria-live="polite">
+    @foreach (var toast in Toasts.Current)
+    {
+        <div @key="toast.Id" class="toast toast-@(toast.Kind == ToastKind.Success ? "success" : "error")"
+             role="@(toast.Kind == ToastKind.Error ? "alert" : "status")">
+            <svg class="toast-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none"
+                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                @if (toast.Kind == ToastKind.Success)
+                {
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                }
+                else
+                {
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7.5v5.5M12 16.5v.01" />
+                }
+            </svg>
+            <span class="toast-message">@toast.Message</span>
+            <button type="button" class="toast-close" aria-label="Dismiss" @onclick="() => Toasts.Dismiss(toast.Id)">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none"
+                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Toasts.Changed += OnChanged;
+
+    // The auto-dismiss timer fires off the circuit's thread, so marshal back onto it.
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Toasts.Changed -= OnChanged;
+}

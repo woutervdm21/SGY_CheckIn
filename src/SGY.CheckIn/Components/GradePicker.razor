@@ -1,0 +1,39 @@
+@* Grade filter chips: "All grades" or any mix of individual grades. An empty selection
+   means all grades, so picking every grade one by one folds back to "All grades". *@
+
+<div class="report-presets">
+    <button type="button" class="preset @(Selected.Count == 0 ? "active" : "")" @onclick="SelectAll">All grades</button>
+    @foreach (var grade in Enum.GetValues<Grade>())
+    {
+        <button type="button" class="preset @(Selected.Contains(grade) ? "active" : "")"
+                aria-pressed="@Selected.Contains(grade)" @onclick="() => Toggle(grade)">
+            @grade.ToDisplayString()
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlySet<Grade> Selected { get; set; } = new HashSet<Grade>();
+
+    [Parameter]
+    public EventCallback<IReadOnlySet<Grade>> SelectedChanged { get; set; }
+
+    private Task SelectAll() => SelectedChanged.InvokeAsync(new HashSet<Grade>());
+
+    private Task Toggle(Grade grade)
+    {
+        var next = new HashSet<Grade>(Selected);
+        if (!next.Remove(grade))
+        {
+            next.Add(grade);
+        }
+
+        if (next.Count == Enum.GetValues<Grade>().Length)
+        {
+            next.Clear();
+        }
+
+        return SelectedChanged.InvokeAsync(next);
+    }
+}

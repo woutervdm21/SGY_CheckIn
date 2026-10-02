@@ -11,8 +11,11 @@ namespace SGY.CheckIn.Services;
 public class YouthService(IDbContextFactory<AppDbContext> dbFactory)
 {
     /// <summary>
-    /// Live search by name/surname for the search-as-you-type box. Capped at 25 results,
-    /// which is plenty for a youth group's scale and keeps the results list scannable.
+    /// Live search for the check-in box. Matches the start of a name, not anywhere in it:
+    /// "a" finds Anke and Adams, not Chantal. Typing on past the first name ("Chantal B")
+    /// matches the full name, and each word of a surname counts as a start, so "Wyk"
+    /// still finds "van Wyk". Capped at 25 results, which is plenty for a youth group's
+    /// scale and keeps the results list scannable.
     /// </summary>
     public async Task<List<Youth>> SearchAsync(string term, CancellationToken ct = default)
     {
@@ -22,13 +25,18 @@ public class YouthService(IDbContextFactory<AppDbContext> dbFactory)
             return [];
         }
 
+        // Typed % or _ are literal characters, not LIKE wildcards.
+        var escaped = term.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
+        var startsWith = $"{escaped}%";
+        var laterWordStartsWith = $"% {escaped}%";
+
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var pattern = $"%{term}%";
         return await db.Youths.AsNoTracking()
             .Where(y => !y.IsArchived &&
-                (EF.Functions.Like(y.Name, pattern) ||
-                 EF.Functions.Like(y.Surname, pattern) ||
-                 EF.Functions.Like(y.Name + " " + y.Surname, pattern)))
+                (EF.Functions.Like(y.Name, startsWith, @"\") ||
+                 EF.Functions.Like(y.Surname, startsWith, @"\") ||
+                 EF.Functions.Like(y.Surname, laterWordStartsWith, @"\") ||
+                 EF.Functions.Like(y.Name + " " + y.Surname, startsWith, @"\")))
             .OrderBy(y => y.Surname).ThenBy(y => y.Name)
             .Take(25)
             .ToListAsync(ct);
@@ -91,30 +99,30 @@ public class YouthService(IDbContextFactory<AppDbContext> dbFactory)
     }
 
     /// <summary>Creates a new youth record and returns it (with its assigned Id).</summary>
-    /// <param name="canEditAdminFields">
-    /// True only for an admin. Comment and behaviour status are admin-only, so a
-    /// volunteer's form never contributes them.
+    /// <param name="canEditBehaviourStatus">
+    /// True only for an admin. Behaviour status is admin-only, so a volunteer's new youth
+    /// always starts green.
     /// </param>
-    public async Task<Youth> CreateAsync(YouthFormModel form, bool canEditAdminFields, CancellationToken ct = default)
+    public async Task<Youth> CreateAsync(YouthFormModel form, bool canEditBehaviourStatus, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var youth = new Youth();
-        form.CopyTo(youth, canEditAdminFields);
+        form.CopyTo(youth, canEditBehaviourStatus);
         db.Youths.Add(youth);
         await db.SaveChangesAsync(ct);
         return youth;
     }
 
-    /// <param name="canEditAdminFields">
-    /// True only for an admin. A volunteer's submission leaves the existing comment and
-    /// behaviour status untouched rather than resetting them.
+    /// <param name="canEditBehaviourStatus">
+    /// True only for an admin. A volunteer's submission leaves the existing behaviour
+    /// status untouched rather than resetting it.
     /// </param>
-    public async Task UpdateAsync(int id, YouthFormModel form, bool canEditAdminFields, CancellationToken ct = default)
+    public async Task UpdateAsync(int id, YouthFormModel form, bool canEditBehaviourStatus, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var youth = await db.Youths.FirstOrDefaultAsync(y => y.Id == id, ct)
             ?? throw new InvalidOperationException($"Youth {id} not found.");
-        form.CopyTo(youth, canEditAdminFields);
+        form.CopyTo(youth, canEditBehaviourStatus);
         await db.SaveChangesAsync(ct);
     }
 

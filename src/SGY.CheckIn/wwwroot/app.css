@@ -198,6 +198,53 @@ textarea {
     line-height: 1.5;
 }
 
+/* DD/MM/YYYY date box (DateField.razor): a text input with a calendar button on the right.
+   The button is a transparent native date input over the icon, so tapping it opens the
+   device's own picker. */
+.date-field {
+    position: relative;
+}
+
+    .date-field > input[type=text] {
+        padding-right: 56px;
+    }
+
+.date-field-picker {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+    .date-field-picker:hover {
+        color: var(--accent);
+    }
+
+    .date-field-picker input[type=date] {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+        /* Chrome only opens its picker from the indicator, so stretch it over the button. */
+        .date-field-picker input[type=date]::-webkit-calendar-picker-indicator {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
 .validation-message {
     color: var(--danger);
     font-size: 0.82rem;
@@ -394,14 +441,114 @@ textarea {
 
 .login-card h1 {
     font-size: 1.5rem;
-    margin: 0 0 var(--space-2);
+    margin: 0 0 var(--space-5);
 }
 
-.login-subtitle {
+/* Step 1 of sign-in: which group. Big touch targets, one per line. */
+.login-prompt {
+    margin: 0 0 var(--space-3);
     color: var(--text-muted);
-    margin: 0 0 var(--space-5);
-    font-size: 0.95rem;
+    font-weight: 600;
 }
+
+.group-choices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.group-choice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 18px;
+    border: 2px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated-2);
+    color: var(--text);
+    text-decoration: none;
+    transition: border-color .15s, color .15s, background .15s;
+}
+
+    .group-choice:hover {
+        border-color: var(--accent);
+        background: var(--accent-soft-bg);
+    }
+
+    /* Not built yet: the same amber as the "Under development" note it leads to. */
+    .group-choice.soon {
+        border-color: rgba(255, 184, 77, 0.45);
+        background: var(--warning-bg);
+        opacity: 0.55;
+    }
+
+        .group-choice.soon:hover {
+            border-color: var(--warning);
+            background: rgba(255, 184, 77, 0.18);
+            opacity: 0.8;
+        }
+
+        .group-choice.soon .group-choice-note {
+            color: var(--warning);
+        }
+
+.group-choice-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.15rem;
+}
+
+.group-choice-note {
+    color: var(--text-faint);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Step 2: the chosen group, shown above the password box or the "under development" note. */
+.login-group-chip {
+    display: inline-block;
+    margin: 0 0 var(--space-4);
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft-bg);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.under-development {
+    padding: var(--space-4);
+    border: 1px solid rgba(255, 184, 77, 0.35);
+    border-radius: var(--radius-md);
+    background: var(--warning-bg);
+}
+
+    .under-development p {
+        margin: 0;
+        color: var(--text-muted);
+    }
+
+    .under-development .under-development-title {
+        margin-bottom: var(--space-1);
+        color: var(--warning);
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+.login-back {
+    display: inline-block;
+    margin-top: var(--space-4);
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+    .login-back:hover {
+        color: var(--accent);
+    }
 
 .login-error {
     background: var(--danger-bg);
@@ -731,26 +878,183 @@ textarea {
     font-size: 1.05rem;
 }
 
-.confirmation-toast {
-    background: var(--success-bg);
-    color: var(--success);
-    border: 1px solid rgba(61, 220, 132, 0.3);
-    padding: 14px 18px;
-    border-radius: var(--radius-md);
+.detail-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.detail-edit {
+    flex: none;
+    padding: 9px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    text-decoration: none;
     font-weight: 600;
+    font-size: 0.9rem;
+    transition: border-color .15s, color .15s;
+}
+
+    .detail-edit:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+/* The youth's details, laid out to read back to them before checking in. */
+.detail-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3) var(--space-4);
+    margin: var(--space-2) 0;
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+    .detail-list dt {
+        color: var(--text-faint);
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 2px;
+    }
+
+    .detail-list dd {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+.detail-age {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Deliberately quieter than the check-in button: undo is for fixing a mistake. */
+.undo-checkin-button {
+    align-self: center;
+    padding: 10px 18px;
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+}
+
+    .undo-checkin-button:hover {
+        border-color: var(--danger);
+        color: var(--danger);
+    }
+
+.undo-confirm p {
+    margin: 0;
     text-align: center;
+}
+
+.undo-confirm .archive-confirm-actions {
+    justify-content: center;
+}
+
+@media (max-width: 380px) {
+    .detail-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Pop-up confirmations (ToastHost.razor): pinned to the bottom of the screen, above
+   whatever page is showing, so "Saved" or the reason it failed is seen without scrolling. */
+.toast-stack {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0 var(--space-4);
+    pointer-events: none;
+}
+
+.toast {
+    pointer-events: auto;
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 14px 10px 14px 16px;
+    background: var(--bg-elevated-2);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-left: 4px solid var(--toast-colour);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    font-weight: 600;
     animation: toast-in .3s cubic-bezier(.2,.8,.2,1) both;
 }
+
+.toast-success {
+    --toast-colour: var(--success);
+}
+
+.toast-error {
+    --toast-colour: var(--danger);
+}
+
+.toast-icon {
+    flex: none;
+    color: var(--toast-colour);
+}
+
+.toast-message {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.4;
+}
+
+.toast-close {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+    .toast-close:hover {
+        color: var(--text);
+        background: var(--bg-elevated);
+    }
 
 @keyframes toast-in {
     from {
         opacity: 0;
-        transform: translateY(8px);
+        transform: translateY(12px);
     }
 
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast {
+        animation: none;
     }
 }
 
@@ -1007,14 +1311,6 @@ legend {
         box-shadow: none;
     }
 
-.save-confirmation {
-    background: var(--success-bg);
-    color: var(--success);
-    padding: 10px 14px;
-    border-radius: var(--radius-sm);
-    font-weight: 600;
-}
-
 .archive-section {
     border-top: 1px solid var(--border);
     padding-top: var(--space-4);
@@ -1127,6 +1423,41 @@ legend {
         .log-table a:hover {
             text-decoration: underline;
         }
+
+.log-actions {
+    text-align: right;
+}
+
+    .log-actions > * + * {
+        margin-left: var(--space-3);
+    }
+
+.log-undo-button {
+    padding: 6px 12px;
+    background: var(--danger-bg);
+    border: 1px solid rgba(255, 107, 107, 0.4);
+    border-radius: var(--radius-sm);
+    color: var(--danger);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+    .log-undo-button:hover {
+        background: rgba(255, 107, 107, 0.22);
+        border-color: var(--danger);
+    }
+
+/* The "are you sure" row that opens under a check-in when Undo is tapped. */
+.log-table tr.log-undo-confirm td {
+    white-space: normal;
+    border-top: 0;
+    background: var(--danger-bg);
+}
+
+    .log-undo-confirm p {
+        margin: 0;
+    }
 
 /* =========================================================================
    Roles, profiles, and form extras
@@ -1781,6 +2112,72 @@ input[type=checkbox] {
     justify-content: space-between;
     gap: var(--space-3);
 }
+
+.dashboard-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+/* Export page: one card per download, filters stacked above the download button. */
+.export-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+    .export-card h2 {
+        margin: 0;
+    }
+
+    .export-card > .field-hint {
+        margin-top: calc(-1 * var(--space-3));
+    }
+
+.export-filter {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.export-download {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+
+.export-count {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.export-button {
+    text-decoration: none;
+    padding: 12px 22px;
+}
+
+    .export-button.disabled {
+        opacity: 0.45;
+        pointer-events: none;
+    }
+
+.back-link {
+    display: inline-block;
+    margin-bottom: var(--space-2);
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+    .back-link:hover {
+        color: var(--accent);
+    }
 
 .export-link {
     font-size: 0.85rem;

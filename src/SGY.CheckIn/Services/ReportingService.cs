@@ -162,32 +162,6 @@ public class ReportingService(IDbContextFactory<AppDbContext> dbFactory)
             MissingTotal: missingAll.Count);
     }
 
-    /// <summary>Flat per-check-in rows for the CSV export — one line per arrival.</summary>
-    public async Task<List<(DateTime LocalTime, string Name, string Surname, Grade Grade)>> GetCheckInRowsAsync(
-        DateOnly from, DateOnly to, CancellationToken ct = default)
-    {
-        if (to < from)
-        {
-            (from, to) = (to, from);
-        }
-
-        var utcStart = ToUtc(from);
-        var utcEnd = ToUtc(to.AddDays(1));
-
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var rows = await db.CheckIns.AsNoTracking()
-            .Where(c => c.Timestamp >= utcStart && c.Timestamp < utcEnd)
-            .OrderBy(c => c.Timestamp)
-            .Select(c => new { c.Timestamp, c.Youth.Name, c.Youth.Surname, c.Youth.Grade })
-            .ToListAsync(ct);
-
-        return [.. rows.Select(r => (
-            TimeZoneInfo.ConvertTimeFromUtc(r.Timestamp, TimeZoneInfo.Local),
-            r.Name,
-            r.Surname,
-            r.Grade))];
-    }
-
     private static DateTime ToUtc(DateOnly localDate) =>
         TimeZoneInfo.ConvertTimeToUtc(localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), TimeZoneInfo.Local);
 }

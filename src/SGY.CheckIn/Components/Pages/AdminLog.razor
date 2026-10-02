@@ -1,6 +1,8 @@
 @page "/admin/log"
 @attribute [Authorize]
 @inject CheckInService CheckInService
+@inject ToastService Toasts
+@inject ILogger<AdminLog> Logger
 
 <PageTitle>Check-In Log — SGY Check-In</PageTitle>
 
@@ -10,7 +12,7 @@
     <div class="log-toolbar">
         <label class="field">
             <span class="field-label">Date</span>
-            <input type="date" value="@selectedDate.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" />
+            <DateField Value="selectedDate" ValueChanged="OnDateChanged" />
         </label>
         <a href="/" class="log-back-button">Back to Check In</a>
     </div>
@@ -43,10 +45,27 @@
                                most likely to spot a mistake in their details, and they can
                                already enter those same details when registering. Archiving
                                stays admin-only — see EditYouth. *@
-                            <td>
+                            <td class="log-actions">
                                 <a href="@($"/admin/youth/{c.YouthId}/edit")">Edit</a>
+                                @if (CanUndo)
+                                {
+                                    <button type="button" class="log-undo-button"
+                                            @onclick="() => confirmingUndoId = c.Id">Undo</button>
+                                }
                             </td>
                         </tr>
+                        @if (confirmingUndoId == c.Id)
+                        {
+                            <tr class="log-undo-confirm">
+                                <td colspan="4">
+                                    <p>Undo @c.Youth.FullName's check-in at @FormatLocalTime(c.Timestamp)? Are you sure?</p>
+                                    <div class="archive-confirm-actions">
+                                        <button type="button" class="archive-confirm-button" @onclick="() => DoUndo(c)">Yes, undo</button>
+                                        <button type="button" class="cancel-link" @onclick="() => confirmingUndoId = null">Cancel</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -55,16 +74,68 @@
 </div>
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
     private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Now);
     private List<CheckInRecord> checkIns = [];
+    private int? confirmingUndoId;
+    private bool isAdmin;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    // Volunteers can undo today's check-ins (the one they just made by mistake); only
+    // admins can change past days. CheckInService enforces the same rule.
+    private bool CanUndo => isAdmin || selectedDate == DateOnly.FromDateTime(DateTime.Now);
 
-    private async Task OnDateChanged(ChangeEventArgs e)
+    protected override async Task OnInitializedAsync()
     {
-        if (DateOnly.TryParse(e.Value?.ToString(), out var date))
+        isAdmin = await IsAdminAsync();
+        await LoadAsync();
+    }
+
+    private async Task<bool> IsAdminAsync()
+    {
+        if (AuthState is null)
+        {
+            return false;
+        }
+
+        var state = await AuthState;
+        return state.User.IsInRole(Roles.Admin);
+    }
+
+    private async Task DoUndo(CheckInRecord checkIn)
+    {
+        confirmingUndoId = null;
+        bool removed;
+        try
+        {
+            // Re-read the role at click time rather than trusting the field set during render.
+            removed = await CheckInService.UndoCheckInAsync(checkIn.Id, await IsAdminAsync());
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Undoing check-in {CheckInId} failed", checkIn.Id);
+            Toasts.ShowError($"Couldn't undo {checkIn.Youth.FullName}'s check-in. Please try again.");
+            return;
+        }
+
+        if (removed)
+        {
+            Toasts.ShowSuccess($"{checkIn.Youth.FullName}'s check-in undone");
+        }
+        else
+        {
+            Toasts.ShowError("That check-in couldn't be undone. It may already be gone, or only an admin can change past days.");
+        }
+        await LoadAsync();
+    }
+
+    private async Task OnDateChanged(DateOnly? value)
+    {
+        if (value is { } date)
         {
             selectedDate = date;
+            confirmingUndoId = null;
             await LoadAsync();
         }
     }
@@ -75,5 +146,5 @@
     }
 
     private static string FormatLocalTime(DateTime utc) =>
-        TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local).ToString("h:mm tt");
+        TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local).ToString("HH:mm");
 }

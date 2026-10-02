@@ -2,6 +2,8 @@
 @attribute [Authorize]
 @inject YouthService YouthService
 @inject CheckInService CheckInService
+@inject ToastService Toasts
+@inject ILogger<CheckIn> Logger
 
 <PageTitle>Check In — SGY Check-In</PageTitle>
 
@@ -10,13 +12,14 @@
         <input @ref="searchInputRef"
                value="@searchTerm"
                @oninput="OnSearchInput"
+               onfocus="this.select()"
                placeholder="Search by name or surname..."
                autocomplete="off"
                autofocus
                class="search-box"
                aria-label="Search for a youth" />
 
-        @if (searchTerm.Length > 0 && !isSearching && results.Count == 0)
+        @if (selected is null && searchTerm.Length > 0 && !isSearching && results.Count == 0)
         {
             <p class="search-hint">No one found matching "@searchTerm".</p>
         }
@@ -59,29 +62,67 @@
     @if (selected is not null)
     {
         <div class="detail-panel">
-            <h2>@selected.FullName</h2>
-            <p class="detail-grade">@selected.Grade.ToDisplayString()</p>
+            <div class="detail-header">
+                <div>
+                    <h2>@selected.FullName</h2>
+                    <p class="detail-grade">@selected.Grade.ToDisplayString()</p>
+                </div>
+                <a href="@($"/admin/youth/{selected.Id}/edit?from=checkin")" class="detail-edit">Edit details</a>
+            </div>
+
+            @* For the volunteer to confirm with the youth before checking them in; anything
+               wrong is fixed through "Edit details", which comes straight back here. Leaders'
+               notes are left off on purpose: the youth may be looking at this screen. *@
+            <dl class="detail-list">
+                <div>
+                    <dt>Cell number</dt>
+                    <dd>@selected.CellNo</dd>
+                </div>
+                <div>
+                    <dt>Date of birth</dt>
+                    <dd>@selected.DateOfBirth.ToString("dd/MM/yyyy") <span class="detail-age">(age @AgeToday(selected.DateOfBirth))</span></dd>
+                </div>
+                <div>
+                    <dt>Parent / guardian</dt>
+                    <dd>@selected.ParentName @selected.ParentSurname</dd>
+                </div>
+                <div>
+                    <dt>Parent's cell</dt>
+                    <dd>@selected.ParentCellNo</dd>
+                </div>
+            </dl>
 
             @if (todayCheckIn is not null)
             {
-                @* Deliberately not a button: checking the same youth in a second time only
-                   adds a duplicate row to the log, so this states the situation rather than
-                   offering an action with no useful outcome. *@
+                @* No second "Check In": that would only add a duplicate row to the log. Undo
+                   is for a youth checked in by mistake, so it asks first. *@
                 <div class="already-checked-in" role="status">
                     <span class="already-checked-in-title">Already checked in</span>
                     <span class="already-checked-in-time">at @FormatLocalTime(todayCheckIn.Timestamp)</span>
                 </div>
+
+                @if (!confirmingUndo)
+                {
+                    <button type="button" class="undo-checkin-button" @onclick="() => confirmingUndo = true">
+                        Undo check-in
+                    </button>
+                }
+                else
+                {
+                    <div class="undo-confirm">
+                        <p>Undo @selected.Name's check-in at @FormatLocalTime(todayCheckIn.Timestamp)? Are you sure?</p>
+                        <div class="archive-confirm-actions">
+                            <button type="button" class="archive-confirm-button" @onclick="DoUndoCheckIn">Yes, undo</button>
+                            <button type="button" class="cancel-link" @onclick="() => confirmingUndo = false">Cancel</button>
+                        </div>
+                    </div>
+                }
             }
             else
             {
                 <button type="button" class="checkin-button" @onclick="DoCheckIn">Check In</button>
             }
         </div>
-    }
-
-    @if (!string.IsNullOrEmpty(confirmationMessage))
-    {
-        <div class="confirmation-toast" role="status">@confirmationMessage</div>
     }
 
     <a href="/admin/log" class="today-summary">
@@ -100,26 +141,21 @@
 
     private Youth? selected;
     private CheckInRecord? todayCheckIn;
-    private string? confirmationMessage;
+    private bool confirmingUndo;
+
+    // Set when coming back from "Edit details", so the same youth is still selected.
+    [SupplyParameterFromQuery(Name = "youth")]
+    private int? ReturningYouthId { get; set; }
     private int todayCount;
     private bool needsFocus = true;
-
-    [SupplyParameterFromQuery(Name = "welcome")]
-    private string? WelcomeName { get; set; }
-
-    [SupplyParameterFromQuery(Name = "added")]
-    private string? AddedName { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         todayCount = await CheckInService.GetTodayCountAsync();
-        if (!string.IsNullOrEmpty(WelcomeName))
+
+        if (ReturningYouthId is { } id && await YouthService.GetByIdAsync(id) is { IsArchived: false } youth)
         {
-            confirmationMessage = $"{WelcomeName} registered and checked in!";
-        }
-        else if (!string.IsNullOrEmpty(AddedName))
-        {
-            confirmationMessage = $"{AddedName} registered — not checked in yet.";
+            await SelectYouth(youth);
         }
     }
 
@@ -135,7 +171,12 @@
     private async Task OnSearchInput(ChangeEventArgs e)
     {
         searchTerm = e.Value?.ToString() ?? "";
-        confirmationMessage = null;
+
+        // A new search replaces whoever was picked from the last one.
+        selected = null;
+        todayCheckIn = null;
+        confirmingUndo = false;
+
         debounceCts?.Cancel();
         var cts = new CancellationTokenSource();
         debounceCts = cts;
@@ -172,8 +213,16 @@
 
     private async Task SelectYouth(Youth youth)
     {
+        // Close the list and show the picked name in the box, as if the search had been
+        // typed out in full. Cancelling first stops a search still in flight from
+        // reopening the list. (The box selects its text on focus, so typing starts over.)
+        debounceCts?.Cancel();
+        searchTerm = youth.FullName;
+        results = [];
+        isSearching = false;
+
         selected = youth;
-        confirmationMessage = null;
+        confirmingUndo = false;
         todayCheckIn = await CheckInService.GetTodayCheckInAsync(youth.Id);
     }
 
@@ -184,8 +233,18 @@
             return;
         }
 
-        await CheckInService.CheckInAsync(selected.Id);
-        confirmationMessage = $"{selected.FullName} checked in at {FormatLocalTime(DateTime.UtcNow)}";
+        try
+        {
+            await CheckInService.CheckInAsync(selected.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Checking in youth {YouthId} failed", selected.Id);
+            Toasts.ShowError($"Couldn't check {selected.FullName} in. Please try again.");
+            return;
+        }
+
+        Toasts.ShowSuccess($"{selected.FullName} checked in at {FormatLocalTime(DateTime.UtcNow)}");
         todayCount = await CheckInService.GetTodayCountAsync();
 
         searchTerm = "";
@@ -196,6 +255,39 @@
         needsFocus = true;
     }
 
+    private async Task DoUndoCheckIn()
+    {
+        if (selected is null)
+        {
+            return;
+        }
+
+        var youth = selected;
+        try
+        {
+            await CheckInService.UndoTodayCheckInAsync(youth.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Undoing check-in for youth {YouthId} failed", youth.Id);
+            Toasts.ShowError($"Couldn't undo {youth.FullName}'s check-in. Please try again.");
+            return;
+        }
+
+        confirmingUndo = false;
+        todayCheckIn = null;
+        checkedInTodayIds.Remove(youth.Id);
+        todayCount = await CheckInService.GetTodayCountAsync();
+        Toasts.ShowSuccess($"{youth.FullName}'s check-in undone");
+    }
+
+    private static int AgeToday(DateOnly dateOfBirth)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var age = today.Year - dateOfBirth.Year;
+        return dateOfBirth > today.AddYears(-age) ? age - 1 : age;
+    }
+
     private static string FormatLocalTime(DateTime utc) =>
-        TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local).ToString("h:mm tt");
+        TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local).ToString("HH:mm");
 }

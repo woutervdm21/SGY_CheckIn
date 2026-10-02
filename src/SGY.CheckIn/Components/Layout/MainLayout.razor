@@ -12,6 +12,7 @@
             <AuthorizeView Roles="@Roles.Admin">
                 <NavLink href="/admin/profiles">Profiles</NavLink>
                 <NavLink href="/admin/dashboard">Dashboard</NavLink>
+                <NavLink href="/admin/settings">Settings</NavLink>
             </AuthorizeView>
         </nav>
         <div class="app-account">
@@ -33,6 +34,8 @@
 
     <footer class="app-footer">SGY Check-In v@(AppInfo.Version)</footer>
 </div>
+
+<ToastHost />
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
