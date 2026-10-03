@@ -153,9 +153,17 @@ All the youth details and check-ins are kept in a storage area Docker looks afte
 ## Backups
 
 Once a week the app saves a full copy of the database by itself. It needs no setup. Each copy
-has everything: every youth, every check-in since the app was first used, leaders' notes, and
-settings including the volunteer password. The app keeps the 12 newest copies (about three
-months) and deletes older ones. Nothing is lost, because each copy has everything.
+holds everything as it was at that moment: every youth, every check-in, leaders' notes, and
+settings including the volunteer password.
+
+The app keeps the 12 newest copies and deletes older ones. With only the weekly copies, that is
+about three months. Copies made with **Back up now**, and the copy made before every restore,
+count toward the 12 too, so pressing it many times pushes the older weekly copies out.
+
+A copy can only bring back what was there when it was made. If a check-in is deleted or a note
+is changed by mistake, and nobody notices until after the oldest kept copy, the old version is
+gone. To keep a longer history, raise `Backup__Keep` (see `docker-compose.yml`), or keep
+downloaded copies as described below.
 
 Because church computers are often switched off at night, the app does not wait for a set time.
 A few minutes after it starts, and then every hour while it runs, it checks the newest copy. If

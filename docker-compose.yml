@@ -16,8 +16,12 @@ services:
       # set here: an admin sets it on the Settings page.
       CheckInAuth__AdminPasswordHash: ""
       # Backups: a full copy of the database once a week, keeping the 12 newest, saved in
-      # the data storage area (/data/backups). To keep them in a folder on this computer
-      # instead (one that syncs to OneDrive, say), add a line under volumes: like
+      # the data storage area (/data/backups). Manual and pre-restore copies count toward
+      # the 12. To keep a longer history, uncomment and change these:
+      # Backup__Keep: "12"
+      # Backup__IntervalDays: "7"
+      # To keep them in a folder on this computer instead (one that syncs to OneDrive,
+      # say), add a line under volumes: like
       #   - C:/Users/Church/OneDrive/SG-Backups:/backups
       # and uncomment this:
       # Backup__Directory: /backups

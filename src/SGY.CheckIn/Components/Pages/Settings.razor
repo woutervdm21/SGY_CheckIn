@@ -51,10 +51,11 @@
         <legend>Backups</legend>
 
         <p class="field-hint">
-            Once a week the app saves a full copy of everything: every youth, check-in, leaders'
-            note and setting, back to day one. It keeps the @Backups.Keep newest copies and deletes
-            older ones. Nothing is lost, because each copy has everything. Download one now and
-            then and keep it somewhere safe, like a USB stick or the church Drive.
+            @IntervalText the app saves a full copy of everything as it is at that moment: every
+            youth, check-in, leaders' note and setting. It keeps the @Backups.Keep newest copies
+            and deletes older ones. Copies from Back up now and from restoring count toward that,
+            so a mistake older than the oldest copy can't be undone. Download one now and then
+            and keep it somewhere safe, like a USB stick or the church Drive.
         </p>
 
         @if (Backups.LastError is { } error)
@@ -159,6 +160,13 @@
             _ => $"{days} days ago",
         };
     }
+
+    private string IntervalText => (int)Backups.Interval.TotalDays switch
+    {
+        1 => "Once a day",
+        7 => "Once a week",
+        var days => $"Every {days} days",
+    };
 
     private static string FormatSize(long bytes) =>
         bytes < 1024 * 1024 ? $"{Math.Max(1, bytes / 1024)} KB" : $"{bytes / (1024.0 * 1024):0.0} MB";
