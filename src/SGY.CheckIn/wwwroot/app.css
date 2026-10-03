@@ -42,7 +42,7 @@
        website and signage. */
     --accent: #00d8d8;
     --accent-2: #03c0c1;
-    --accent-text: #ffffff;
+    --accent-text: #0e1015;
     --accent-soft-bg: rgba(0, 216, 216, 0.14);
 
     --success: #3ddc84;
@@ -706,18 +706,18 @@ textarea {
     gap: var(--space-3);
 }
 
-.search-box {
+input.search-box {
     padding: 16px 20px;
     font-size: 1.1rem;
     border-radius: var(--radius-pill);
     box-shadow: var(--shadow-md);
 }
 
-    .search-box:focus {
+    input.search-box:focus {
         box-shadow: 0 0 0 4px var(--accent-soft-bg), var(--shadow-md);
     }
 
-    .search-box::placeholder {
+    input.search-box::placeholder {
         color: var(--text-faint);
     }
 
@@ -1101,7 +1101,7 @@ textarea {
         padding-top: var(--space-5);
     }
 
-    .search-box {
+    input.search-box {
         padding: 24px 30px;
         font-size: 1.5rem;
     }
@@ -2047,6 +2047,10 @@ input[type=checkbox] {
 .bar-tick {
     padding-top: 6px;
     font-size: 0.65rem;
+    line-height: 1.2;
+    /* Fixed height: empty ticks must take the same room as labelled ones, or those
+       bars sit lower than the rest. */
+    height: calc(1.2em + 6px);
     color: var(--text-faint);
     text-align: center;
     white-space: nowrap;
