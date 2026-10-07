@@ -3,7 +3,7 @@
 
 <div class="report-presets">
     <button type="button" class="preset @(Selected.Count == 0 ? "active" : "")" @onclick="SelectAll">All grades</button>
-    @foreach (var grade in Enum.GetValues<Grade>())
+    @foreach (var grade in Grades)
     {
         <button type="button" class="preset @(Selected.Contains(grade) ? "active" : "")"
                 aria-pressed="@Selected.Contains(grade)" @onclick="() => Toggle(grade)">
@@ -19,6 +19,10 @@
     [Parameter]
     public EventCallback<IReadOnlySet<Grade>> SelectedChanged { get; set; }
 
+    /// <summary>The grades to offer: the signed-in group's.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<Grade> Grades { get; set; } = [];
+
     private Task SelectAll() => SelectedChanged.InvokeAsync(new HashSet<Grade>());
 
     private Task Toggle(Grade grade)
@@ -29,7 +33,7 @@
             next.Add(grade);
         }
 
-        if (next.Count == Enum.GetValues<Grade>().Length)
+        if (next.Count == Grades.Count)
         {
             next.Clear();
         }

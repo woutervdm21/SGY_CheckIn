@@ -6,7 +6,7 @@ using SGY.CheckIn.Models;
 
 namespace SGY.CheckIn.Services;
 
-/// <summary>Which youth a youth-list export covers.</summary>
+/// <summary>Which people a list export covers.</summary>
 public enum YouthListScope
 {
     Active,
@@ -14,7 +14,7 @@ public enum YouthListScope
     All,
 }
 
-/// <summary>Narrows a youth-list export by leaders' notes.</summary>
+/// <summary>Narrows a Youth list export by leaders' notes.</summary>
 public enum NotesFilter
 {
     Everyone,
@@ -25,17 +25,19 @@ public enum NotesFilter
 /// <summary>
 /// Filters for the check-in history export. An empty <see cref="Grades"/> means every
 /// grade. Round-trips through the download link's query string, so the page and the CSV
-/// endpoint always agree on what's being exported.
+/// endpoint always agree on what's being exported. The group in the query string is only
+/// checked against the signed-in user's (see Program.cs); the data always comes from theirs.
 /// </summary>
-public sealed record CheckInExportFilter(DateOnly From, DateOnly To, IReadOnlySet<Grade> Grades, bool IncludeArchived)
+public sealed record CheckInExportFilter(Group Group, DateOnly From, DateOnly To, IReadOnlySet<Grade> Grades, bool IncludeArchived)
 {
     public string ToQuery() =>
-        $"from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}&grades={ExportQuery.FormatGrades(Grades)}&archived={IncludeArchived.ToString().ToLowerInvariant()}";
+        $"group={Group.ToKey()}&from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}&grades={ExportQuery.FormatGrades(Grades)}&archived={IncludeArchived.ToString().ToLowerInvariant()}";
 
-    public static CheckInExportFilter FromQuery(IQueryCollection query)
+    public static CheckInExportFilter FromQuery(IQueryCollection query, Group group)
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         return new CheckInExportFilter(
+            group,
             ExportQuery.ParseDate(query["from"]) ?? today.AddDays(-84),
             ExportQuery.ParseDate(query["to"]) ?? today,
             ExportQuery.ParseGrades(query["grades"]),
@@ -43,13 +45,14 @@ public sealed record CheckInExportFilter(DateOnly From, DateOnly To, IReadOnlySe
     }
 }
 
-/// <summary>Filters for the youth-list export. An empty <see cref="Grades"/> means every grade.</summary>
-public sealed record YouthExportFilter(YouthListScope Scope, IReadOnlySet<Grade> Grades, NotesFilter Notes)
+/// <summary>Filters for the people-list export. An empty <see cref="Grades"/> means every grade.</summary>
+public sealed record YouthExportFilter(Group Group, YouthListScope Scope, IReadOnlySet<Grade> Grades, NotesFilter Notes)
 {
     public string ToQuery() =>
-        $"scope={Scope.ToString().ToLowerInvariant()}&grades={ExportQuery.FormatGrades(Grades)}&notes={Notes.ToString().ToLowerInvariant()}";
+        $"group={Group.ToKey()}&scope={Scope.ToString().ToLowerInvariant()}&grades={ExportQuery.FormatGrades(Grades)}&notes={Notes.ToString().ToLowerInvariant()}";
 
-    public static YouthExportFilter FromQuery(IQueryCollection query) => new(
+    public static YouthExportFilter FromQuery(IQueryCollection query, Group group) => new(
+        group,
         Enum.TryParse<YouthListScope>(query["scope"], ignoreCase: true, out var scope) ? scope : YouthListScope.Active,
         ExportQuery.ParseGrades(query["grades"]),
         Enum.TryParse<NotesFilter>(query["notes"], ignoreCase: true, out var notes) ? notes : NotesFilter.Everyone);
@@ -62,7 +65,8 @@ internal static class ExportQuery
 
     public static IReadOnlySet<Grade> ParseGrades(string? value) =>
         (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(v => int.TryParse(v, out var n) ? (Grade)n : default)
+            .Select(v => int.TryParse(v, out var n) ? (Grade?)n : null)
+            .OfType<Grade>()
             .Where(Enum.IsDefined)
             .ToHashSet();
 
@@ -72,8 +76,8 @@ internal static class ExportQuery
 
 /// <summary>
 /// CSV exports for the admin Export page: check-in history (one row per arrival) and the
-/// youth list (one row per youth). Both carry every stored field, so the church office
-/// gets the whole record rather than a summary.
+/// people list (one row per person), for the signed-in group only. Both carry every field
+/// that group records, so the church office gets the whole record rather than a summary.
 /// </summary>
 /// <remarks>
 /// Dates are written yyyy-MM-dd: spreadsheets read that the same way whatever their
@@ -82,12 +86,7 @@ internal static class ExportQuery
 /// </remarks>
 public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
 {
-    private static readonly string[] YouthColumns =
-    [
-        "Youth ID", "Name", "Surname", "Cell number", "Grade", "Date of birth", "Age",
-        "Parent name", "Parent surname", "Parent cell number",
-        "Status", "Care Village", "Comment", "Archived", "Registered on",
-    ];
+    private sealed record Column(string Header, Func<Youth, string> Value);
 
     public async Task<int> CountCheckInsAsync(CheckInExportFilter filter, CancellationToken ct = default)
     {
@@ -109,8 +108,9 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
             .OrderBy(c => c.Timestamp)
             .ToListAsync(ct);
 
+        var columns = PersonColumns(filter.Group);
         var csv = new CsvWriter();
-        csv.Row(["Check-in ID", "Date", "Time", .. YouthColumns]);
+        csv.Row(["Check-in ID", "Date", "Time", .. columns.Select(c => c.Header)]);
         foreach (var c in rows)
         {
             var local = ToLocal(c.Timestamp);
@@ -118,7 +118,7 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
                 c.Id.ToString(CultureInfo.InvariantCulture),
                 local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 local.ToString("HH:mm", CultureInfo.InvariantCulture),
-                .. YouthFields(c.Youth),
+                .. columns.Select(col => col.Value(c.Youth)),
             ]);
         }
         return csv.ToBytes();
@@ -138,12 +138,13 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
             })
             .ToListAsync(ct);
 
+        var columns = PersonColumns(filter.Group);
         var csv = new CsvWriter();
-        csv.Row([.. YouthColumns, "Total check-ins", "First check-in", "Last check-in"]);
+        csv.Row([.. columns.Select(c => c.Header), "Total check-ins", "First check-in", "Last check-in"]);
         foreach (var r in rows)
         {
             csv.Row([
-                .. YouthFields(r.Youth),
+                .. columns.Select(col => col.Value(r.Youth)),
                 r.Total.ToString(CultureInfo.InvariantCulture),
                 FormatDate(r.First),
                 FormatDate(r.Last),
@@ -159,10 +160,10 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
         var utcEnd = ToUtc(to.AddDays(1));
 
         var query = db.CheckIns.AsNoTracking()
-            .Where(c => c.Timestamp >= utcStart && c.Timestamp < utcEnd);
+            .Where(c => c.Youth.Group == filter.Group && c.Timestamp >= utcStart && c.Timestamp < utcEnd);
         if (filter.Grades.Count > 0)
         {
-            var grades = filter.Grades.ToList();
+            var grades = filter.Grades.Cast<Grade?>().ToList();
             query = query.Where(c => grades.Contains(c.Youth.Grade));
         }
         if (!filter.IncludeArchived)
@@ -174,15 +175,16 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
 
     private static IQueryable<Youth> YouthMatching(AppDbContext db, YouthExportFilter filter)
     {
-        var query = filter.Scope switch
+        var query = db.Youths.AsNoTracking().Where(y => y.Group == filter.Group);
+        query = filter.Scope switch
         {
-            YouthListScope.Active => db.Youths.AsNoTracking().Where(y => !y.IsArchived),
-            YouthListScope.Archived => db.Youths.AsNoTracking().Where(y => y.IsArchived),
-            _ => db.Youths.AsNoTracking(),
+            YouthListScope.Active => query.Where(y => !y.IsArchived),
+            YouthListScope.Archived => query.Where(y => y.IsArchived),
+            _ => query,
         };
         if (filter.Grades.Count > 0)
         {
-            var grades = filter.Grades.ToList();
+            var grades = filter.Grades.Cast<Grade?>().ToList();
             query = query.Where(y => grades.Contains(y.Grade));
         }
         return filter.Notes switch
@@ -193,24 +195,45 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
         };
     }
 
-    private static string[] YouthFields(Youth y) =>
-    [
-        y.Id.ToString(CultureInfo.InvariantCulture),
-        y.Name,
-        y.Surname,
-        y.CellNo,
-        y.Grade.ToDisplayString(),
-        y.DateOfBirth.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        AgeToday(y.DateOfBirth).ToString(CultureInfo.InvariantCulture),
-        y.ParentName,
-        y.ParentSurname,
-        y.ParentCellNo,
-        y.BehaviourStatus.ToDisplayString(),
-        y.InCareVillage ? "Yes" : "No",
-        y.Comment ?? "",
-        y.IsArchived ? "Yes" : "No",
-        FormatDate(y.CreatedAt),
-    ];
+    /// <summary>Every field the group records, in the order of the registration form.</summary>
+    private static List<Column> PersonColumns(Group group)
+    {
+        List<Column> columns =
+        [
+            new("Person ID", y => y.Id.ToString(CultureInfo.InvariantCulture)),
+            new("Name", y => y.Name),
+            new("Surname", y => y.Surname),
+        ];
+        if (group.HasOwnCell())
+        {
+            columns.Add(new("Cell number", y => y.CellNo ?? ""));
+        }
+        if (group.HasGrades())
+        {
+            columns.Add(new("Grade", y => y.Grade.ToDisplayString()));
+        }
+        columns.Add(new("Date of birth", y => y.DateOfBirth.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+        columns.Add(new("Age", y => AgeToday(y.DateOfBirth).ToString(CultureInfo.InvariantCulture)));
+        if (group.HasParents())
+        {
+            columns.Add(new("Parent name", y => y.ParentName ?? ""));
+            columns.Add(new("Parent surname", y => y.ParentSurname ?? ""));
+            columns.Add(new("Parent cell number", y => y.ParentCellNo ?? ""));
+        }
+        if (group.HasMedical())
+        {
+            columns.Add(new("Medical & allergies", y => y.Medical ?? ""));
+        }
+        if (group.HasLeaderFlags())
+        {
+            columns.Add(new("Status", y => y.BehaviourStatus.ToDisplayString()));
+            columns.Add(new("Care Village", y => y.InCareVillage ? "Yes" : "No"));
+        }
+        columns.Add(new("Comment", y => y.Comment ?? ""));
+        columns.Add(new("Archived", y => y.IsArchived ? "Yes" : "No"));
+        columns.Add(new("Registered on", y => FormatDate(y.CreatedAt)));
+        return columns;
+    }
 
     private static string FormatDate(DateTime? utc) =>
         utc is { } value ? ToLocal(value).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "";

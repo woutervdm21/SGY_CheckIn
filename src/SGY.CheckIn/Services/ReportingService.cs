@@ -11,13 +11,13 @@ public record SessionAttendance(DateOnly Date, int Count);
 public record GradeAttendance(Grade Grade, int Count);
 
 /// <summary>A youth and how many evenings they attended in the period.</summary>
-public record YouthAttendance(int YouthId, string FullName, Grade Grade, int Evenings);
+public record YouthAttendance(int YouthId, string FullName, Grade? Grade, int Evenings);
 
 /// <summary>
 /// A youth who didn't come in the period, with the last date they were seen at all
 /// (null if they've never checked in since being registered).
 /// </summary>
-public record LapsedYouth(int YouthId, string FullName, Grade Grade, DateOnly? LastSeen);
+public record LapsedYouth(int YouthId, string FullName, Grade? Grade, DateOnly? LastSeen);
 
 /// <summary>Everything the admin dashboard shows for one date range.</summary>
 public record AttendanceReport(
@@ -46,14 +46,14 @@ public record AttendanceReport(
 }
 
 /// <summary>
-/// Read-only aggregation over check-ins for the admin dashboard. Rows are pulled into
+/// Read-only aggregation over one group's check-ins for the admin dashboard. Rows are pulled into
 /// memory and grouped there rather than grouped in SQL: check-ins are stored in UTC but
 /// every figure here is "per evening" in the church's local time zone, which SQLite can't
 /// express, and a year of a youth group's attendance is a few thousand rows at most.
 /// </summary>
 public class ReportingService(IDbContextFactory<AppDbContext> dbFactory)
 {
-    public async Task<AttendanceReport> GetAttendanceAsync(DateOnly from, DateOnly to, CancellationToken ct = default)
+    public async Task<AttendanceReport> GetAttendanceAsync(DateOnly from, DateOnly to, Group group, CancellationToken ct = default)
     {
         if (to < from)
         {
@@ -66,7 +66,7 @@ public class ReportingService(IDbContextFactory<AppDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
         var rows = await db.CheckIns.AsNoTracking()
-            .Where(c => c.Timestamp >= utcStart && c.Timestamp < utcEnd)
+            .Where(c => c.Youth.Group == group && c.Timestamp >= utcStart && c.Timestamp < utcEnd)
             .Select(c => new { c.YouthId, c.Timestamp, c.Youth.Grade, c.Youth.Name, c.Youth.Surname })
             .ToListAsync(ct);
 
@@ -88,8 +88,10 @@ public class ReportingService(IDbContextFactory<AppDbContext> dbFactory)
             .OrderBy(s => s.Date)
             .ToList();
 
+        // Young adults have no grade, so their breakdown comes out empty.
         var byGrade = local
-            .GroupBy(r => r.Grade)
+            .Where(r => r.Grade is not null)
+            .GroupBy(r => r.Grade!.Value)
             .Select(g => new GradeAttendance(g.Key, g.Select(r => r.YouthId).Distinct().Count()))
             .OrderBy(g => g.Grade)
             .ToList();
@@ -109,7 +111,7 @@ public class ReportingService(IDbContextFactory<AppDbContext> dbFactory)
             .ToList();
 
         var newRegistrations = await db.Youths.AsNoTracking()
-            .CountAsync(y => y.CreatedAt >= utcStart && y.CreatedAt < utcEnd, ct);
+            .CountAsync(y => y.Group == group && y.CreatedAt >= utcStart && y.CreatedAt < utcEnd, ct);
 
         // Who's slipped away: youth still on the books who didn't come at all in the
         // period. "Last seen" looks at their whole history, not just the range, so the
@@ -117,7 +119,7 @@ public class ReportingService(IDbContextFactory<AppDbContext> dbFactory)
         var attendedIds = local.Select(r => r.YouthId).Distinct().ToHashSet();
 
         var candidates = await db.Youths.AsNoTracking()
-            .Where(y => !y.IsArchived)
+            .Where(y => y.Group == group && !y.IsArchived)
             .Select(y => new
             {
                 y.Id,

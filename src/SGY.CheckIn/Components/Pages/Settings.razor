@@ -6,7 +6,7 @@
 @inject ToastService Toasts
 @inject ILogger<Settings> Logger
 
-<PageTitle>Settings — SGY Check-In</PageTitle>
+<PageTitle>Settings — SG Check-In</PageTitle>
 
 <div class="register-page">
     <h1>Settings</h1>
@@ -14,13 +14,31 @@
     <EditForm Model="form" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="ShowFixFieldsError" FormName="volunteer-password">
         <DataAnnotationsValidator />
 
+        @* One volunteer password per group, so each group's volunteers only see their own
+           people. The admin password works for every group and lives in config. *@
         <fieldset>
-            <legend>Volunteer password</legend>
+            <legend>Volunteer passwords</legend>
 
-            @if (!VolunteerPasswords.IsSet)
-            {
-                <p class="field-hint">No volunteer password is set yet, so volunteers can't sign in.</p>
-            }
+            <div class="field">
+                <span class="field-label">Group</span>
+                <div class="report-presets">
+                    @foreach (var g in Enum.GetValues<Group>())
+                    {
+                        <button type="button" class="preset @(passwordGroup == g ? "active" : "")"
+                                aria-pressed="@(passwordGroup == g)" @onclick="() => passwordGroup = g">
+                            @g.ToDisplayString()
+                        </button>
+                    }
+                </div>
+                @if (VolunteerPasswords.IsSet(passwordGroup))
+                {
+                    <p class="field-hint">@passwordGroup.ToDisplayString() has a volunteer password. Set a new one below to change it.</p>
+                }
+                else
+                {
+                    <p class="backup-status problem">No @passwordGroup.ToDisplayString() volunteer password yet, so @passwordGroup.ToDisplayString() volunteers can't sign in.</p>
+                }
+            </div>
 
             <label class="field">
                 <span class="field-label">New password</span>
@@ -35,12 +53,13 @@
             </label>
 
             <p class="field-hint">
-                Every device signed in as a volunteer will be signed out and need the new password.
+                Every device signed in as a @passwordGroup.ToDisplayString() volunteer will be signed
+                out and need the new password. Other groups aren't affected.
             </p>
         </fieldset>
 
         <div class="form-actions">
-            <button type="submit" class="submit-button" disabled="@isSubmitting">Change password</button>
+            <button type="submit" class="submit-button" disabled="@isSubmitting">Set @passwordGroup.ToDisplayString() password</button>
         </div>
     </EditForm>
 
@@ -52,7 +71,7 @@
 
         <p class="field-hint">
             @IntervalText the app saves a full copy of everything as it is at that moment: every
-            youth, check-in, leaders' note and setting. It keeps the @Backups.Keep newest copies
+            person in every group, check-in, leaders' note and setting. It keeps the @Backups.Keep newest copies
             and deletes older ones. Copies from Back up now and from restoring count toward that,
             so a mistake older than the oldest copy can't be undone. Download one now and then
             and keep it somewhere safe, like a USB stick or the church Drive.
@@ -100,25 +119,35 @@
 </div>
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
     private PasswordForm form = new();
+    private Group passwordGroup = Group.Youth;
     private bool isSubmitting;
     private IReadOnlyList<BackupFile> backups = [];
     private bool isBackingUp;
 
-    protected override void OnInitialized() => backups = Backups.List();
+    protected override async Task OnInitializedAsync()
+    {
+        // Start on the group the admin is working in; the buttons reach the others.
+        passwordGroup = await AuthState.GetGroupAsync();
+        backups = Backups.List();
+    }
 
     private async Task HandleValidSubmit()
     {
         isSubmitting = true;
+        var group = passwordGroup;
         try
         {
-            await VolunteerPasswords.SetAsync(form.NewPassword);
+            await VolunteerPasswords.SetAsync(group, form.NewPassword);
             form = new();
-            Toasts.ShowSuccess("Volunteer password changed. Volunteer devices need the new password.");
+            Toasts.ShowSuccess($"{group.ToDisplayString()} volunteer password set. {group.ToDisplayString()} volunteer devices need the new password.");
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Changing the volunteer password failed");
+            Logger.LogError(ex, "Changing the {Group} volunteer password failed", group);
             Toasts.ShowError("Couldn't change the password. The old one still works. Please try again.");
         }
         finally

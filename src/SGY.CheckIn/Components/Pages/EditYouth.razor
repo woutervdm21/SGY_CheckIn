@@ -9,12 +9,12 @@
 @inject ToastService Toasts
 @inject ILogger<EditYouth> Logger
 
-<PageTitle>Edit Youth — SGY Check-In</PageTitle>
+<PageTitle>Edit details — SG Check-In</PageTitle>
 
 <div class="register-page">
     @if (youth is null)
     {
-        <p class="empty-state">Youth not found.</p>
+        <p class="empty-state">No one with that ID in @group.ToDisplayString().</p>
     }
     else
     {
@@ -24,7 +24,7 @@
             <DataAnnotationsValidator />
 
             <fieldset>
-                <legend>Youth details</legend>
+                <legend>@group.PersonNoun().Capitalised() details</legend>
 
                 <label class="field">
                     <span class="field-label">Name</span>
@@ -38,31 +38,48 @@
                     <ValidationMessage For="() => form.Surname" />
                 </label>
 
-                <label class="field">
-                    <span class="field-label">Cell number</span>
-                    <InputText @bind-Value="form.CellNo" type="tel" />
-                    <ValidationMessage For="() => form.CellNo" />
-                </label>
+                @if (group.HasOwnCell())
+                {
+                    <label class="field">
+                        <span class="field-label">Cell number</span>
+                        <InputText @bind-Value="form.CellNo" type="tel" />
+                        <ValidationMessage For="() => form.CellNo" />
+                    </label>
+                }
 
-                <label class="field">
-                    <span class="field-label">Grade</span>
-                    <InputSelect @bind-Value="form.Grade">
-                        <option value="">Select a grade…</option>
-                        @foreach (var grade in Enum.GetValues<Grade>())
-                        {
-                            <option value="@grade">@grade.ToDisplayString()</option>
-                        }
-                    </InputSelect>
-                    <ValidationMessage For="() => form.Grade" />
-                </label>
+                @if (group.HasGrades())
+                {
+                    <label class="field">
+                        <span class="field-label">Grade</span>
+                        <InputSelect @bind-Value="form.Grade">
+                            <option value="">Select a grade…</option>
+                            @foreach (var grade in group.Grades())
+                            {
+                                <option value="@grade">@grade.ToDisplayString()</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => form.Grade" />
+                    </label>
+                }
 
                 <label class="field">
                     <span class="field-label">Date of birth</span>
                     <DateField @bind-Value="form.DateOfBirth" />
                     <ValidationMessage For="() => form.DateOfBirth" />
                 </label>
+
+                @if (group.HasMedical())
+                {
+                    <label class="field">
+                        <span class="field-label">Medical &amp; allergies <span class="optional">(optional, printed on their label)</span></span>
+                        <InputText @bind-Value="form.Medical" placeholder="e.g. peanut allergy, asthma pump in bag" />
+                        <ValidationMessage For="() => form.Medical" />
+                    </label>
+                }
             </fieldset>
 
+            @if (group.HasParents())
+            {
             <fieldset>
                 <legend>Parent / guardian details</legend>
 
@@ -84,6 +101,7 @@
                     <ValidationMessage For="() => form.ParentCellNo" />
                 </label>
             </fieldset>
+            }
 
             @* Only the behaviour status is admin-only to change. Volunteers still see it —
                a leader on the floor needs to know a youth is flagged — but read-only.
@@ -92,7 +110,8 @@
             <fieldset>
                 <legend>Leaders' notes</legend>
 
-                @if (isAdmin)
+                @* Status and Care Village are Youth only; other groups have just the comment. *@
+                @if (group.HasLeaderFlags() && isAdmin)
                 {
                     <label class="field">
                         <span class="field-label">Status</span>
@@ -104,7 +123,7 @@
                         </InputSelect>
                     </label>
                 }
-                else
+                else if (group.HasLeaderFlags())
                 {
                     <div class="field">
                         <span class="field-label">Status</span>
@@ -119,15 +138,18 @@
 
                 @* Care Village is its own flag, not a third status: a youth can be
                    flagged red and in Care Village at the same time. *@
-                <label class="checkbox-field">
-                    <InputCheckbox @bind-Value="form.InCareVillage" />
-                    <span>Care Village</span>
-                </label>
+                @if (group.HasLeaderFlags())
+                {
+                    <label class="checkbox-field">
+                        <InputCheckbox @bind-Value="form.InCareVillage" />
+                        <span>Care Village</span>
+                    </label>
+                }
 
                 <label class="field">
                     <span class="field-label">Comment <span class="optional">(optional)</span></span>
                     <InputTextArea @bind-Value="form.Comment" rows="4"
-                                   placeholder="Anything leaders should know — allergies, pastoral notes." />
+                                   placeholder="@group.CommentPlaceholder()" />
                     <ValidationMessage For="() => form.Comment" />
                 </label>
             </fieldset>
@@ -160,13 +182,13 @@
         <div class="archive-section">
             @if (youth.IsArchived)
             {
-                <p>This youth is archived — hidden from check-in search.</p>
-                <button type="button" class="archive-button restore" @onclick="DoUnarchive">Restore this youth</button>
+                <p>This @group.PersonNoun() is archived — hidden from check-in search.</p>
+                <button type="button" class="archive-button restore" @onclick="DoUnarchive">Restore this @group.PersonNoun()</button>
             }
             else if (!confirmingArchive)
             {
                 <button type="button" class="archive-button" @onclick="() => confirmingArchive = true">
-                    Archive this youth
+                    Archive this @group.PersonNoun()
                 </button>
             }
             else
@@ -198,6 +220,7 @@
 
     private string CheckInUrl => $"/?youth={Id}";
 
+    private Group group = Group.Youth;
     private Youth? youth;
     private YouthFormModel form = new();
     private bool confirmingArchive;
@@ -206,8 +229,9 @@
     protected override async Task OnParametersSetAsync()
     {
         isAdmin = await IsAdminAsync();
+        group = await AuthState.GetGroupAsync();
 
-        youth = await YouthService.GetByIdAsync(Id);
+        youth = await YouthService.GetByIdAsync(Id, group);
         if (youth is not null)
         {
             form = YouthFormModel.FromYouth(youth);
@@ -230,7 +254,7 @@
         try
         {
             // Re-read the role at submit time rather than trusting the field set during render.
-            await YouthService.UpdateAsync(Id, form, await IsAdminAsync());
+            await YouthService.UpdateAsync(Id, group, form, await IsAdminAsync());
             Toasts.ShowSuccess("Saved successfully");
         }
         catch (Exception ex)
@@ -253,7 +277,7 @@
     {
         try
         {
-            await YouthService.ArchiveAsync(Id);
+            await YouthService.ArchiveAsync(Id, group);
             Toasts.ShowSuccess($"{youth?.FullName} archived");
             Navigation.NavigateTo("/admin/profiles");
         }
@@ -268,8 +292,8 @@
     {
         try
         {
-            await YouthService.UnarchiveAsync(Id);
-            youth = await YouthService.GetByIdAsync(Id);
+            await YouthService.UnarchiveAsync(Id, group);
+            youth = await YouthService.GetByIdAsync(Id, group);
             Toasts.ShowSuccess($"{youth?.FullName} restored");
         }
         catch (Exception ex)

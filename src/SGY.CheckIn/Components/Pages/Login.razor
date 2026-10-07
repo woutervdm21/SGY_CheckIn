@@ -4,10 +4,10 @@
 
 <PageTitle>Sign in — SG Check-In</PageTitle>
 
-@* Two steps: pick the group, then sign in. The app will serve Kids and Young Adults too;
-   for now only Youth is built, so the other two stop at an "under development" note.
-   The step lives in the query string (?group=), so Back and refresh behave, and
-   returnUrl is carried through every step. *@
+@* Two steps: pick the group, then sign in. The group decides which people the app shows
+   and which volunteer password works (the admin password works for every group). The
+   step lives in the query string (?group=), so Back and refresh behave, and returnUrl is
+   carried through every step. *@
 <div class="login-card">
     <img src="sg-logo.avif" alt="SG" class="login-logo" />
     <h1>SG Check-In</h1>
@@ -16,30 +16,17 @@
     {
         <p class="login-prompt">Choose a group</p>
         <div class="group-choices">
-            @foreach (var group in Groups)
+            @foreach (var group in Enum.GetValues<Group>())
             {
-                <a href="@StepUrl(group.Key)" class="group-choice @(group.Ready ? "" : "soon")">
-                    <span class="group-choice-name">@group.Name</span>
-                    @if (!group.Ready)
-                    {
-                        <span class="group-choice-note">Coming soon</span>
-                    }
+                <a href="@StepUrl(group.ToKey())" class="group-choice">
+                    <span class="group-choice-name">@group.ToDisplayString()</span>
                 </a>
             }
         </div>
     }
-    else if (!SelectedGroup.Ready)
-    {
-        <p class="login-group-chip">@SelectedGroup.Name</p>
-        <div class="under-development" role="status">
-            <p class="under-development-title">Under development</p>
-            <p>Check-in for @SelectedGroup.Name is still being built.</p>
-        </div>
-        <a href="@StepUrl(null)" class="login-back">← Back</a>
-    }
     else
     {
-        <p class="login-group-chip">@SelectedGroup.Name</p>
+        <p class="login-group-chip">@SelectedGroup.Value.ToDisplayString()</p>
 
         @if (HasError)
         {
@@ -48,6 +35,7 @@
 
         <form method="post" action="/account/login" class="login-form">
             <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <input type="hidden" name="group" value="@SelectedGroup.Value.ToKey()" />
             <input
                 type="password"
                 name="password"
@@ -64,15 +52,6 @@
 </div>
 
 @code {
-    private sealed record Group(string Key, string Name, bool Ready);
-
-    private static readonly Group[] Groups =
-    [
-        new("kids", "Kids", Ready: false),
-        new("youth", "Youth", Ready: true),
-        new("young-adults", "Young Adults", Ready: false),
-    ];
-
     [SupplyParameterFromQuery(Name = "group")]
     private string? GroupKey { get; set; }
 
@@ -82,9 +61,9 @@
     [SupplyParameterFromQuery(Name = "returnUrl")]
     private string? ReturnUrl { get; set; }
 
-    // A failed sign-in comes back with ?error=1; that only happens from the Youth form.
+    // A failed sign-in comes back with ?error=1 and the group it was for.
     private Group? SelectedGroup =>
-        Groups.FirstOrDefault(g => g.Key == (HasError ? GroupKey ?? "youth" : GroupKey));
+        GroupExtensions.FromKey(HasError ? GroupKey ?? "youth" : GroupKey);
 
     private bool HasError => Error == "1";
 

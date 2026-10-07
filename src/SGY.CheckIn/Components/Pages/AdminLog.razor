@@ -4,7 +4,7 @@
 @inject ToastService Toasts
 @inject ILogger<AdminLog> Logger
 
-<PageTitle>Check-In Log — SGY Check-In</PageTitle>
+<PageTitle>Check-In Log — SG Check-In</PageTitle>
 
 <div class="admin-log-page">
     <h1>Check-in log</h1>
@@ -30,7 +30,10 @@
                     <tr>
                         <th>Time</th>
                         <th>Name</th>
-                        <th>Grade</th>
+                        @if (group.HasGrades())
+                        {
+                            <th>Grade</th>
+                        }
                         <th></th>
                     </tr>
                 </thead>
@@ -40,7 +43,10 @@
                         <tr>
                             <td>@FormatLocalTime(c.Timestamp)</td>
                             <td>@c.Youth.FullName</td>
-                            <td>@c.Youth.Grade.ToDisplayString()</td>
+                            @if (group.HasGrades())
+                            {
+                                <td>@c.Youth.Grade.ToDisplayString()</td>
+                            }
                             @* Open to volunteers too: whoever checked a youth in is the one
                                most likely to spot a mistake in their details, and they can
                                already enter those same details when registering. Archiving
@@ -57,7 +63,7 @@
                         @if (confirmingUndoId == c.Id)
                         {
                             <tr class="log-undo-confirm">
-                                <td colspan="4">
+                                <td colspan="@(group.HasGrades() ? 4 : 3)">
                                     <p>Undo @c.Youth.FullName's check-in at @FormatLocalTime(c.Timestamp)? Are you sure?</p>
                                     <div class="archive-confirm-actions">
                                         <button type="button" class="archive-confirm-button" @onclick="() => DoUndo(c)">Yes, undo</button>
@@ -77,6 +83,7 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 
+    private Group group = Group.Youth;
     private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Now);
     private List<CheckInRecord> checkIns = [];
     private int? confirmingUndoId;
@@ -89,6 +96,7 @@
     protected override async Task OnInitializedAsync()
     {
         isAdmin = await IsAdminAsync();
+        group = await AuthState.GetGroupAsync();
         await LoadAsync();
     }
 
@@ -110,7 +118,7 @@
         try
         {
             // Re-read the role at click time rather than trusting the field set during render.
-            removed = await CheckInService.UndoCheckInAsync(checkIn.Id, await IsAdminAsync());
+            removed = await CheckInService.UndoCheckInAsync(checkIn.Id, group, await IsAdminAsync());
         }
         catch (Exception ex)
         {
@@ -142,7 +150,7 @@
 
     private async Task LoadAsync()
     {
-        checkIns = await CheckInService.GetByDateAsync(selectedDate);
+        checkIns = await CheckInService.GetByDateAsync(selectedDate, group);
     }
 
     private static string FormatLocalTime(DateTime utc) =>

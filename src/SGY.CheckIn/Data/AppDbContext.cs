@@ -11,8 +11,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Every lookup filters on the group first, then sorts by name.
         modelBuilder.Entity<Youth>()
-            .HasIndex(y => new { y.Surname, y.Name });
+            .HasIndex(y => new { y.Group, y.Surname, y.Name });
 
         modelBuilder.Entity<CheckInRecord>()
             .HasIndex(c => c.Timestamp);

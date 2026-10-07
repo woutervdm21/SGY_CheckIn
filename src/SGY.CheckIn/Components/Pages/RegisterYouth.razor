@@ -6,10 +6,10 @@
 @inject ToastService Toasts
 @inject ILogger<RegisterYouth> Logger
 
-<PageTitle>Register — SGY Check-In</PageTitle>
+<PageTitle>Register — SG Check-In</PageTitle>
 
 <div class="register-page">
-    <h1>Register a new youth</h1>
+    <h1>Register a new @group.PersonNoun()</h1>
     <p class="page-subtitle">Use "Register &amp; Check In" if they're here now, or "Register" to just add them.</p>
 
     @if (similarMatches.Count > 0)
@@ -17,7 +17,7 @@
         <div class="duplicate-nudge" role="status">
             <p>
                 Found @(similarMatches.Count == 1 ? "someone" : "some people") with a similar name already registered:
-                <strong>@string.Join(", ", similarMatches.Select(m => $"{m.FullName} ({m.Grade.ToDisplayString()})"))</strong>
+                <strong>@string.Join(", ", similarMatches.Select(m => m.Grade is null ? m.FullName : $"{m.FullName} ({m.Grade.ToDisplayString()})"))</strong>
             </p>
             <p>If that's who you're looking for, <a href="/">search for them instead</a> — no need to register a duplicate.</p>
         </div>
@@ -27,7 +27,7 @@
         <DataAnnotationsValidator />
 
         <fieldset>
-            <legend>Youth details</legend>
+            <legend>@group.PersonNoun().Capitalised() details</legend>
 
             <label class="field">
                 <span class="field-label">Name</span>
@@ -41,31 +41,48 @@
                 <ValidationMessage For="() => form.Surname" />
             </label>
 
-            <label class="field">
-                <span class="field-label">Cell number</span>
-                <InputText @bind-Value="form.CellNo" type="tel" />
-                <ValidationMessage For="() => form.CellNo" />
-            </label>
+            @if (group.HasOwnCell())
+            {
+                <label class="field">
+                    <span class="field-label">Cell number</span>
+                    <InputText @bind-Value="form.CellNo" type="tel" />
+                    <ValidationMessage For="() => form.CellNo" />
+                </label>
+            }
 
-            <label class="field">
-                <span class="field-label">Grade</span>
-                <InputSelect @bind-Value="form.Grade">
-                    <option value="">Select a grade…</option>
-                    @foreach (var grade in Enum.GetValues<Grade>())
-                    {
-                        <option value="@grade">@grade.ToDisplayString()</option>
-                    }
-                </InputSelect>
-                <ValidationMessage For="() => form.Grade" />
-            </label>
+            @if (group.HasGrades())
+            {
+                <label class="field">
+                    <span class="field-label">Grade</span>
+                    <InputSelect @bind-Value="form.Grade">
+                        <option value="">Select a grade…</option>
+                        @foreach (var grade in group.Grades())
+                        {
+                            <option value="@grade">@grade.ToDisplayString()</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => form.Grade" />
+                </label>
+            }
 
             <label class="field">
                 <span class="field-label">Date of birth</span>
                 <DateField @bind-Value="form.DateOfBirth" />
                 <ValidationMessage For="() => form.DateOfBirth" />
             </label>
+
+            @if (group.HasMedical())
+            {
+                <label class="field">
+                    <span class="field-label">Medical &amp; allergies <span class="optional">(optional, printed on their label)</span></span>
+                    <InputText @bind-Value="form.Medical" type="text" placeholder="e.g. peanut allergy, asthma pump in bag" />
+                    <ValidationMessage For="() => form.Medical" />
+                </label>
+            }
         </fieldset>
 
+        @if (group.HasParents())
+        {
         <fieldset>
             <legend>Parent / guardian details</legend>
 
@@ -93,13 +110,15 @@
                 <ValidationMessage For="() => form.ParentCellNo" />
             </label>
         </fieldset>
+        }
 
         @* The status is admin-only, same as on the edit page: a volunteer registering a
-           youth just gets the default green status. *@
+           youth just gets the default green status. Status and Care Village are Youth
+           only; every group keeps the comment. *@
         <fieldset>
             <legend>Leaders' notes</legend>
 
-            @if (isAdmin)
+            @if (isAdmin && group.HasLeaderFlags())
             {
                 <label class="field">
                     <span class="field-label">Status</span>
@@ -113,15 +132,18 @@
             }
 
             @* Independent of the status above — a youth can be both. *@
-            <label class="checkbox-field">
-                <InputCheckbox @bind-Value="form.InCareVillage" />
-                <span>Care Village</span>
-            </label>
+            @if (group.HasLeaderFlags())
+            {
+                <label class="checkbox-field">
+                    <InputCheckbox @bind-Value="form.InCareVillage" />
+                    <span>Care Village</span>
+                </label>
+            }
 
             <label class="field">
                 <span class="field-label">Comment <span class="optional">(optional)</span></span>
                 <InputTextArea @bind-Value="form.Comment" rows="4"
-                               placeholder="Anything leaders should know — allergies, pastoral notes." />
+                               placeholder="@group.CommentPlaceholder()" />
                 <ValidationMessage For="() => form.Comment" />
             </label>
         </fieldset>
@@ -145,6 +167,7 @@
     private Task<AuthenticationState>? AuthState { get; set; }
 
     private YouthFormModel form = new();
+    private Group group = Group.Youth;
     private bool isAdmin;
     private List<Youth> similarMatches = [];
     private bool isSubmitting;
@@ -154,6 +177,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        group = await AuthState.GetGroupAsync();
+        form.Group = group;
         isAdmin = await IsAdminAsync();
     }
 
@@ -194,7 +219,7 @@
         try
         {
             await Task.Delay(400, cts.Token);
-            var found = await YouthService.FindSimilarAsync(form.Name, form.Surname, cts.Token);
+            var found = await YouthService.FindSimilarAsync(form.Name, form.Surname, group, cts.Token);
             if (cts.Token.IsCancellationRequested)
             {
                 return;
@@ -233,7 +258,7 @@
         {
             try
             {
-                await CheckInService.CheckInAsync(youth.Id);
+                await CheckInService.CheckInAsync(youth.Id, group);
                 Toasts.ShowSuccess($"{youth.FullName} registered and checked in");
             }
             catch (Exception ex)

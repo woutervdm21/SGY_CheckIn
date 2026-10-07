@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = Roles.Admin)]
 @inject ExportService Exports
 
-<PageTitle>Export data — SGY Check-In</PageTitle>
+<PageTitle>Export data — SG Check-In</PageTitle>
 
 @* Two downloads with their own filters. Each shows how many rows match before
    downloading, and the link carries the filters in its query string, so the file
@@ -16,7 +16,7 @@
 
     <section class="chart-card export-card">
         <h2>Check-in history</h2>
-        <p class="field-hint">One line per arrival, with the youth's full details.</p>
+        <p class="field-hint">One line per arrival, with the @group.PersonNoun()'s full details.</p>
 
         <div class="export-filter">
             <span class="field-label">Dates</span>
@@ -37,15 +37,18 @@
             </div>
         </div>
 
-        <div class="export-filter">
-            <span class="field-label">Grades</span>
-            <GradePicker Selected="historyGrades" SelectedChanged="OnHistoryGradesChanged" />
-            <p class="field-hint">Grade is the youth's grade now, not when they checked in.</p>
-        </div>
+        @if (group.HasGrades())
+        {
+            <div class="export-filter">
+                <span class="field-label">Grades</span>
+                <GradePicker Grades="group.Grades()" Selected="historyGrades" SelectedChanged="OnHistoryGradesChanged" />
+                <p class="field-hint">Grade is the @group.PersonNoun()'s grade now, not when they checked in.</p>
+            </div>
+        }
 
         <label class="checkbox-field">
             <input type="checkbox" checked="@includeArchived" @onchange="OnIncludeArchivedChanged" />
-            <span>Include archived youth</span>
+            <span>Include archived @group.PeopleNoun()</span>
         </label>
 
         <div class="export-download">
@@ -57,8 +60,8 @@
     </section>
 
     <section class="chart-card export-card">
-        <h2>Youth list</h2>
-        <p class="field-hint">One line per youth: every detail, leaders' notes, and their check-in totals.</p>
+        <h2>@group.ToDisplayString() list</h2>
+        <p class="field-hint">One line per @group.PersonNoun(): every detail, leaders' notes, and their check-in totals.</p>
 
         <div class="export-filter">
             <span class="field-label">Who</span>
@@ -70,25 +73,32 @@
             </div>
         </div>
 
-        <div class="export-filter">
-            <span class="field-label">Grades</span>
-            <GradePicker Selected="youthGrades" SelectedChanged="OnYouthGradesChanged" />
-        </div>
-
-        <div class="export-filter">
-            <span class="field-label">Leaders' notes</span>
-            <div class="report-presets">
-                @foreach (var (value, label) in NotesOptions)
-                {
-                    <button type="button" class="preset @(notes == value ? "active" : "")" @onclick="() => SetNotes(value)">@label</button>
-                }
+        @if (group.HasGrades())
+        {
+            <div class="export-filter">
+                <span class="field-label">Grades</span>
+                <GradePicker Grades="group.Grades()" Selected="youthGrades" SelectedChanged="OnYouthGradesChanged" />
             </div>
-        </div>
+        }
+
+        @* Trouble makers and Care Village are Youth only. *@
+        @if (group.HasLeaderFlags())
+        {
+            <div class="export-filter">
+                <span class="field-label">Leaders' notes</span>
+                <div class="report-presets">
+                    @foreach (var (value, label) in NotesOptions)
+                    {
+                        <button type="button" class="preset @(notes == value ? "active" : "")" @onclick="() => SetNotes(value)">@label</button>
+                    }
+                </div>
+            </div>
+        }
 
         <div class="export-download">
-            <span class="export-count">@Plural(youthCount, "youth", "youth")</span>
+            <span class="export-count">@Plural(youthCount, group.PersonNoun(), group.PeopleNoun())</span>
             <a class="submit-button export-button @(youthCount == 0 ? "disabled" : "")"
-               href="@($"/admin/export/youth.csv?{YouthFilter.ToQuery()}")" download
+               href="@($"/admin/export/people.csv?{YouthFilter.ToQuery()}")" download
                aria-disabled="@(youthCount == 0)">Download CSV</a>
         </div>
     </section>
@@ -114,6 +124,11 @@
         (NotesFilter.CareVillage, "Care Village"),
     ];
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Group group = Group.Youth;
+
     // Check-in history filters.
     private DateOnly from = DateOnly.FromDateTime(DateTime.Today).AddDays(-84);
     private DateOnly to = DateOnly.FromDateTime(DateTime.Today);
@@ -128,11 +143,12 @@
     private NotesFilter notes = NotesFilter.Everyone;
     private int youthCount;
 
-    private CheckInExportFilter HistoryFilter => new(from, to, historyGrades, includeArchived);
-    private YouthExportFilter YouthFilter => new(scope, youthGrades, notes);
+    private CheckInExportFilter HistoryFilter => new(group, from, to, historyGrades, includeArchived);
+    private YouthExportFilter YouthFilter => new(group, scope, youthGrades, notes);
 
     protected override async Task OnInitializedAsync()
     {
+        group = await AuthState.GetGroupAsync();
         await CountHistoryAsync();
         await CountYouthAsync();
     }

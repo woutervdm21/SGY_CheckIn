@@ -3,7 +3,7 @@
 @inject ReportingService Reporting
 @inject CheckInService CheckInService
 
-<PageTitle>Dashboard — SGY Check-In</PageTitle>
+<PageTitle>Dashboard — SG Check-In</PageTitle>
 
 <div class="dashboard-page">
     <div class="dashboard-heading">
@@ -49,11 +49,11 @@
             </div>
             <div class="stat-tile">
                 <span class="stat-value">@report.UniqueYouth</span>
-                <span class="stat-label">Youth in this period</span>
+                <span class="stat-label">@group.PeopleNoun().Capitalised() in this period</span>
             </div>
             <div class="stat-tile">
                 <span class="stat-value">@report.AveragePerSession.ToString("0.#")</span>
-                <span class="stat-label">Average per evening</span>
+                <span class="stat-label">Average per @group.SessionNoun()</span>
             </div>
             <div class="stat-tile">
                 <span class="stat-value">@report.NewRegistrations</span>
@@ -68,7 +68,7 @@
         else
         {
             <section class="chart-card">
-                <h2>Attendance per evening</h2>
+                <h2>Attendance per @group.SessionNoun()</h2>
                 <div class="bar-chart" role="img" aria-label="@ChartAriaLabel">
                     @foreach (var (session, index) in report.Sessions.Select((s, i) => (s, i)))
                     {
@@ -88,6 +88,8 @@
                 </div>
             </section>
 
+            @if (group.HasGrades())
+            {
             <section class="chart-card">
                 <h2>Who came, by grade</h2>
                 <div class="grade-bars">
@@ -103,6 +105,7 @@
                     }
                 </div>
             </section>
+            }
 
             @* Two people lists rather than more aggregates: these are the ones a leader
                acts on — who to thank, and who to phone. Each name links to its profile. *@
@@ -155,7 +158,7 @@
 
             <section class="chart-card">
                 <div class="table-head">
-                    <h2>Every evening</h2>
+                    <h2>Every @group.SessionNoun()</h2>
                     <a class="export-link" href="/admin/export">Export data</a>
                 </div>
                 <div class="table-scroll">
@@ -198,13 +201,19 @@
     private AttendanceReport? report;
     private int todayCount;
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Group group = Group.Youth;
+
     protected override async Task OnInitializedAsync()
     {
-        todayCount = await CheckInService.GetTodayCountAsync();
+        group = await AuthState.GetGroupAsync();
+        todayCount = await CheckInService.GetTodayCountAsync(group);
         await Load();
     }
 
-    private async Task Load() => report = await Reporting.GetAttendanceAsync(from, to);
+    private async Task Load() => report = await Reporting.GetAttendanceAsync(from, to, group);
 
     private async Task OnFromChanged(DateOnly? value)
     {
@@ -239,9 +248,9 @@
 
     private string ChartAriaLabel =>
         report is null || report.SessionCount == 0
-            ? "Attendance per evening"
-            : $"Attendance per evening, {report.SessionCount} evenings, between " +
-              $"{report.Sessions.Min(s => s.Count)} and {report.BusiestSession} youth. Figures in the table below.";
+            ? $"Attendance per {group.SessionNoun()}"
+            : $"Attendance per {group.SessionNoun()}, {report.SessionCount} {group.SessionNoun()}s, between " +
+              $"{report.Sessions.Min(s => s.Count)} and {report.BusiestSession} {group.PeopleNoun()}. Figures in the table below.";
 
     private static int Percent(int value, int max) => max <= 0 ? 0 : (int)Math.Round(value * 100.0 / max);
 

@@ -2,10 +2,28 @@
 
 <div class="app-shell">
     <header class="app-header">
-        <a href="/" class="app-brand">
-            <img src="sg-logo.avif" alt="" class="app-logo" />
-            <span>SGY Check-In</span>
-        </a>
+        @* The brand names the group everything below belongs to. For an admin it's also the
+           group switcher: picking another group posts straight away and reloads there. *@
+        <div class="app-brand">
+            <a href="/" class="app-brand-home" aria-label="Check In">
+                <img src="sg-logo.avif" alt="" class="app-logo" />
+            </a>
+            <AuthorizeView Roles="@Roles.Admin">
+                <Authorized>
+                    <form method="post" action="/account/switch-group" class="group-switch">
+                        <select name="group" aria-label="Switch group" onchange="this.form.submit()">
+                            @foreach (var g in Enum.GetValues<Group>())
+                            {
+                                <option value="@g.ToKey()" selected="@(g == group)">SG @g.ToDisplayString()</option>
+                            }
+                        </select>
+                    </form>
+                </Authorized>
+                <NotAuthorized>
+                    <a href="/" class="app-brand-name">SG @group.ToDisplayString()</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
         <nav class="app-nav">
             <NavLink href="/" Match="Microsoft.AspNetCore.Components.Routing.NavLinkMatch.All">Check In</NavLink>
             <NavLink href="/admin/log">Log</NavLink>
@@ -32,7 +50,7 @@
         @Body
     </main>
 
-    <footer class="app-footer">SGY Check-In v@(AppInfo.Version)</footer>
+    <footer class="app-footer">SG Check-In v@(AppInfo.Version)</footer>
 </div>
 
 <ToastHost />
@@ -42,3 +60,13 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    // Only changes through sign-in or the switcher, both of which reload the page.
+    private Group group = Group.Youth;
+
+    protected override async Task OnInitializedAsync() => group = await AuthState.GetGroupAsync();
+}

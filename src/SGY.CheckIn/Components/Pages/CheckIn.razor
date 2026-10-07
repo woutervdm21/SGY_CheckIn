@@ -3,9 +3,10 @@
 @inject YouthService YouthService
 @inject CheckInService CheckInService
 @inject ToastService Toasts
+@inject IJSRuntime JS
 @inject ILogger<CheckIn> Logger
 
-<PageTitle>Check In — SGY Check-In</PageTitle>
+<PageTitle>Check In — SG Check-In</PageTitle>
 
 <div class="checkin-page">
     <div class="search-panel">
@@ -17,7 +18,7 @@
                autocomplete="off"
                autofocus
                class="search-box"
-               aria-label="Search for a youth" />
+               aria-label="@($"Search for a {group.PersonNoun()}")" />
 
         @if (selected is null && searchTerm.Length > 0 && !isSearching && results.Count == 0)
         {
@@ -56,7 +57,17 @@
             </ul>
         }
 
-        <a href="/register" class="register-link">+ Register a new youth</a>
+        <a href="/register" class="register-link">+ Register a new @group.PersonNoun()</a>
+
+        @* Per device: only the computer with the DYMO plugged in turns this on, so checking
+           in from a phone never pops up a print dialog. *@
+        @if (group.PrintsLabels())
+        {
+            <label class="checkbox-field label-printer-toggle">
+                <input type="checkbox" checked="@isLabelPrinter" @onchange="OnLabelPrinterChanged" />
+                <span>This computer prints name labels</span>
+            </label>
+        }
     </div>
 
     @if (selected is not null)
@@ -65,7 +76,10 @@
             <div class="detail-header">
                 <div>
                     <h2>@selected.FullName</h2>
-                    <p class="detail-grade">@selected.Grade.ToDisplayString()</p>
+                    @if (selected.Grade is not null)
+                    {
+                        <p class="detail-grade">@selected.Grade.ToDisplayString()</p>
+                    }
                 </div>
                 <a href="@($"/admin/youth/{selected.Id}/edit?from=checkin")" class="detail-edit">Edit details</a>
             </div>
@@ -74,22 +88,37 @@
                wrong is fixed through "Edit details", which comes straight back here. Leaders'
                notes are left off on purpose: the youth may be looking at this screen. *@
             <dl class="detail-list">
-                <div>
-                    <dt>Cell number</dt>
-                    <dd>@selected.CellNo</dd>
-                </div>
+                @if (group.HasOwnCell())
+                {
+                    <div>
+                        <dt>Cell number</dt>
+                        <dd>@selected.CellNo</dd>
+                    </div>
+                }
                 <div>
                     <dt>Date of birth</dt>
                     <dd>@selected.DateOfBirth.ToString("dd/MM/yyyy") <span class="detail-age">(age @AgeToday(selected.DateOfBirth))</span></dd>
                 </div>
-                <div>
-                    <dt>Parent / guardian</dt>
-                    <dd>@selected.ParentName @selected.ParentSurname</dd>
-                </div>
-                <div>
-                    <dt>Parent's cell</dt>
-                    <dd>@selected.ParentCellNo</dd>
-                </div>
+                @if (group.HasParents())
+                {
+                    <div>
+                        <dt>Parent / guardian</dt>
+                        <dd>@selected.ParentName @selected.ParentSurname</dd>
+                    </div>
+                    <div>
+                        <dt>Parent's cell</dt>
+                        <dd>@selected.ParentCellNo</dd>
+                    </div>
+                }
+                @* Medical notes are printed on the child's label anyway, so they're fine to show
+                   here — unlike the leaders' comment. *@
+                @if (group.HasMedical())
+                {
+                    <div>
+                        <dt>Medical</dt>
+                        <dd class="@(selected.Medical is null ? "" : "detail-medical")">@(selected.Medical ?? "None")</dd>
+                    </div>
+                }
             </dl>
 
             @if (todayCheckIn is not null)
@@ -122,6 +151,13 @@
             {
                 <button type="button" class="checkin-button" @onclick="DoCheckIn">Check In</button>
             }
+
+            @if (group.PrintsLabels())
+            {
+                <button type="button" class="print-label-button" @onclick="() => PrintLabelAsync(selected!)">
+                    Print label
+                </button>
+            }
         </div>
     }
 
@@ -149,11 +185,20 @@
     private int todayCount;
     private bool needsFocus = true;
 
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Group group = Group.Youth;
+
+    // Read from this device's browser after the first render (it isn't known on the server).
+    private bool isLabelPrinter;
+
     protected override async Task OnInitializedAsync()
     {
-        todayCount = await CheckInService.GetTodayCountAsync();
+        group = await AuthState.GetGroupAsync();
+        todayCount = await CheckInService.GetTodayCountAsync(group);
 
-        if (ReturningYouthId is { } id && await YouthService.GetByIdAsync(id) is { IsArchived: false } youth)
+        if (ReturningYouthId is { } id && await YouthService.GetByIdAsync(id, group) is { IsArchived: false } youth)
         {
             await SelectYouth(youth);
         }
@@ -161,6 +206,20 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && group.PrintsLabels())
+        {
+            try
+            {
+                isLabelPrinter = await JS.InvokeAsync<bool>("sgLabels.isPrinter");
+                StateHasChanged();
+            }
+            catch (JSException ex)
+            {
+                // Check-in still works; this device just won't print until the page reloads.
+                Logger.LogWarning(ex, "Couldn't read the label printer setting");
+            }
+        }
+
         if (needsFocus)
         {
             needsFocus = false;
@@ -194,9 +253,9 @@
             isSearching = true;
             await Task.Delay(250, cts.Token);
 
-            var found = await YouthService.SearchAsync(searchTerm, cts.Token);
+            var found = await YouthService.SearchAsync(searchTerm, group, cts.Token);
             var checkedIn = found.Count > 0
-                ? await CheckInService.GetTodayCheckedInYouthIdsAsync(cts.Token)
+                ? await CheckInService.GetTodayCheckedInYouthIdsAsync(group, cts.Token)
                 : [];
 
             if (cts.Token.IsCancellationRequested) return;
@@ -223,7 +282,7 @@
 
         selected = youth;
         confirmingUndo = false;
-        todayCheckIn = await CheckInService.GetTodayCheckInAsync(youth.Id);
+        todayCheckIn = await CheckInService.GetTodayCheckInAsync(youth.Id, group);
     }
 
     private async Task DoCheckIn()
@@ -235,7 +294,7 @@
 
         try
         {
-            await CheckInService.CheckInAsync(selected.Id);
+            await CheckInService.CheckInAsync(selected.Id, group);
         }
         catch (Exception ex)
         {
@@ -244,8 +303,9 @@
             return;
         }
 
-        Toasts.ShowSuccess($"{selected.FullName} checked in at {FormatLocalTime(DateTime.UtcNow)}");
-        todayCount = await CheckInService.GetTodayCountAsync();
+        var child = selected;
+        Toasts.ShowSuccess($"{child.FullName} checked in at {FormatLocalTime(DateTime.UtcNow)}");
+        todayCount = await CheckInService.GetTodayCountAsync(group);
 
         searchTerm = "";
         results = [];
@@ -253,6 +313,14 @@
         selected = null;
         todayCheckIn = null;
         needsFocus = true;
+
+        // After the screen has cleared for the next child: the print dialog (if Chrome
+        // shows one) holds up the page until it's dealt with.
+        if (group.PrintsLabels() && isLabelPrinter)
+        {
+            StateHasChanged();
+            await PrintLabelAsync(child);
+        }
     }
 
     private async Task DoUndoCheckIn()
@@ -265,7 +333,7 @@
         var youth = selected;
         try
         {
-            await CheckInService.UndoTodayCheckInAsync(youth.Id);
+            await CheckInService.UndoTodayCheckInAsync(youth.Id, group);
         }
         catch (Exception ex)
         {
@@ -277,8 +345,33 @@
         confirmingUndo = false;
         todayCheckIn = null;
         checkedInTodayIds.Remove(youth.Id);
-        todayCount = await CheckInService.GetTodayCountAsync();
+        todayCount = await CheckInService.GetTodayCountAsync(group);
         Toasts.ShowSuccess($"{youth.FullName}'s check-in undone");
+    }
+
+    private async Task OnLabelPrinterChanged(ChangeEventArgs e)
+    {
+        isLabelPrinter = e.Value is true;
+        await JS.InvokeVoidAsync("sgLabels.setPrinter", isLabelPrinter);
+    }
+
+    private async Task PrintLabelAsync(Youth child)
+    {
+        bool printed;
+        try
+        {
+            printed = await JS.InvokeAsync<bool>("sgLabels.print", $"/labels/{child.Id}?group={group.ToKey()}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Printing the label for {YouthId} failed", child.Id);
+            printed = false;
+        }
+
+        if (!printed)
+        {
+            Toasts.ShowError($"Couldn't print {child.Name}'s label. Check the printer and press Print label.");
+        }
     }
 
     private static int AgeToday(DateOnly dateOfBirth)
