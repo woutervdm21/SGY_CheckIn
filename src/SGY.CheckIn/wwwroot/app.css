@@ -678,6 +678,8 @@ textarea {
         transition: color .15s, background .15s;
         flex: 1;
         text-align: center;
+        /* One line each: "Check-in" never breaks at its hyphen. */
+        white-space: nowrap;
     }
 
         .app-nav a:hover {
@@ -1944,6 +1946,19 @@ input[type=checkbox] {
         padding: 7px 11px;
         font-size: 0.76rem;
     }
+
+    /* Room for the admin's five links on one line on a phone. */
+    .app-nav a {
+        padding: 8px 6px;
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .app-nav a {
+        padding: 8px 3px;
+        font-size: 0.76rem;
+    }
 }
 
 /* Enough room for brand + nav + account on one row. 900px rather than 640px so the
@@ -2780,3 +2795,113 @@ input[type=checkbox] {
         font-size: 0.78rem;
         text-align: left;
     }
+
+/* Scan to check out: the camera, then what each label did, newest first. */
+.scan-page {
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.scan-viewer {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: #000;
+}
+
+    .scan-viewer video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+/* Where to hold the label's QR code. */
+.scan-frame {
+    position: absolute;
+    inset: 22% 30%;
+    border: 3px solid rgba(255, 255, 255, 0.85);
+    border-radius: var(--radius-md);
+    box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+}
+
+.scan-starting {
+    position: absolute;
+    inset: auto 0 var(--space-3);
+    margin: 0;
+    text-align: center;
+    color: #fff;
+}
+
+.scan-notice {
+    padding: var(--space-4);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated);
+}
+
+    .scan-notice p {
+        margin: 0;
+    }
+
+        .scan-notice p + p {
+            margin-top: var(--space-2);
+        }
+
+.scan-results {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.scan-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--bg-elevated);
+    animation: card-rise .25s ease both;
+}
+
+    .scan-result.out {
+        background: var(--success-bg);
+        color: var(--success);
+        border-color: color-mix(in srgb, var(--success) 40%, transparent);
+    }
+
+    .scan-result.already, .scan-result.problem {
+        background: var(--danger-bg);
+        color: var(--danger);
+        border-color: rgba(255, 107, 107, 0.35);
+    }
+
+    .scan-result.undone {
+        color: var(--text-muted);
+    }
+
+.scan-result-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.scan-result-title {
+    font-weight: 700;
+}
+
+.scan-result-detail {
+    font-size: 0.88rem;
+    opacity: 0.85;
+}

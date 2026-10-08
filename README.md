@@ -145,6 +145,10 @@ against whoever is collecting them, and **Undo check-out** for a label scanned b
   on `localhost`, the QR code uses the computer's network address instead. Where that
   guess is wrong, set `PublicAddress` (e.g. `http://192.168.0.10:8080`) in the app's
   settings.
+- **Scan to check out** (on Check In) keeps the camera open in the app: hold up one
+  label after another, and each child is checked out with a beep, no taps. Browsers only
+  allow this on a secure (`https://`) address, or on `localhost`; on a plain `http://`
+  address the page says so, and the camera app does the scanning instead.
 - No label, or it won't scan? Find the child on Check In and press **Check out** there.
 - Checked out by mistake? **Undo check-out**, on the scan page or on Check In.
 

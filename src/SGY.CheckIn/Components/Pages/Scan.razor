@@ -1,0 +1,243 @@
+@page "/scan"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@inject CheckInService CheckInService
+@inject IJSRuntime JS
+@inject ILogger<Scan> Logger
+
+<PageTitle>Scan — SG Check-In</PageTitle>
+
+@* Checking Kids out by holding their labels up to the phone, one after another, with no
+   taps (scan.js reads the QR codes). Browsers only allow a page the camera on HTTPS, so on
+   the church's plain-HTTP address the page says so, and the phone's camera app does the
+   scanning instead (it opens /out/{code}, see CheckOut). *@
+<div class="scan-page">
+    <h1>Scan to check out</h1>
+
+    @if (!group.HasCheckOut())
+    {
+        <p class="page-subtitle">Children are checked out in Kids. Sign out and sign in to Kids to scan their labels.</p>
+    }
+    else
+    {
+        @if (camera == CameraState.Insecure)
+        {
+            <div class="scan-notice">
+                <p><strong>This browser won't let the app use the camera here.</strong> Browsers only allow it on a secure (https) address, which the app doesn't have yet.</p>
+                <p>Until then, scan labels with the phone's own camera app and open the link: that checks the child out too.</p>
+            </div>
+        }
+        else if (camera == CameraState.Denied)
+        {
+            <div class="scan-notice">
+                <p><strong>The camera isn't allowed.</strong> Allow it for this site in the browser's settings (the icon beside the address), then reload the page.</p>
+            </div>
+        }
+        else if (camera == CameraState.None)
+        {
+            <div class="scan-notice">
+                <p><strong>No camera found.</strong> Use a phone or tablet with a camera, or scan labels with the phone's own camera app.</p>
+            </div>
+        }
+        else
+        {
+            <p class="page-subtitle">Hold each child's label up to the camera. They're checked out as soon as it reads the code.</p>
+            <div class="scan-viewer">
+                <video @ref="video" muted playsinline aria-label="Camera"></video>
+                <div class="scan-frame" aria-hidden="true"></div>
+                @if (camera == CameraState.Starting)
+                {
+                    <p class="scan-starting">Starting the camera…</p>
+                }
+            </div>
+        }
+
+        @if (scans.Count > 0)
+        {
+            <ul class="scan-results" aria-live="polite">
+                @foreach (var scan in scans)
+                {
+                    <li class="scan-result @scan.Outcome.ToString().ToLowerInvariant()" @key="scan">
+                        <div class="scan-result-text">
+                            <span class="scan-result-title">@scan.Title</span>
+                            @if (scan.Detail is not null)
+                            {
+                                <span class="scan-result-detail">@scan.Detail</span>
+                            }
+                        </div>
+                        @if (scan.Outcome == ScanOutcome.Out && scan.CheckInId is { } id)
+                        {
+                            <button type="button" class="undo-checkin-button" @onclick="() => UndoAsync(scan, id)">Undo</button>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    }
+
+    <a href="/" class="cancel-link">Back to Check In</a>
+</div>
+
+@code {
+    private enum CameraState { Starting, On, Insecure, Denied, None }
+
+    private enum ScanOutcome { Out, Already, Problem, Undone }
+
+    private sealed class ScanResult(ScanOutcome outcome, string title, string? detail, int? checkInId = null)
+    {
+        public ScanOutcome Outcome { get; set; } = outcome;
+        public string Title { get; set; } = title;
+        public string? Detail { get; } = detail;
+        public int? CheckInId { get; } = checkInId;
+    }
+
+    // A label held in front of the camera is read again and again: only once, until it's
+    // been out of view this long.
+    private static readonly TimeSpan SameLabelPause = TimeSpan.FromSeconds(3);
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Group group = Group.Youth;
+    private CameraState camera = CameraState.Starting;
+    private ElementReference video;
+    private DotNetObjectReference<Scan>? self;
+    private readonly List<ScanResult> scans = [];
+    private readonly Dictionary<string, DateTime> lastSeen = [];
+
+    protected override async Task OnInitializedAsync() => group = await AuthState.GetGroupAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !group.HasCheckOut())
+        {
+            return;
+        }
+
+        self = DotNetObjectReference.Create(this);
+        try
+        {
+            camera = await JS.InvokeAsync<string>("sgScan.start", video, self) switch
+            {
+                "ok" => CameraState.On,
+                "insecure" => CameraState.Insecure,
+                "denied" => CameraState.Denied,
+                _ => CameraState.None,
+            };
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Couldn't start the camera for scanning");
+            camera = CameraState.None;
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>Called by scan.js with the text of each QR code it reads.</summary>
+    [JSInvokable]
+    public async Task OnScannedAsync(string text)
+    {
+        var code = CodeFrom(text);
+        var now = DateTime.UtcNow;
+        var seenRecently = lastSeen.TryGetValue(code, out var last) && now - last < SameLabelPause;
+        lastSeen[code] = now;
+        if (seenRecently)
+        {
+            return;
+        }
+
+        var result = await CheckOutAsync(code);
+        scans.Insert(0, result);
+        if (scans.Count > 8)
+        {
+            scans.RemoveAt(scans.Count - 1);
+        }
+        await SignalAsync(result.Outcome == ScanOutcome.Out);
+        StateHasChanged();
+    }
+
+    private async Task<ScanResult> CheckOutAsync(string code)
+    {
+        try
+        {
+            var checkIn = await CheckInService.FindByCheckOutCodeAsync(code, group);
+            if (checkIn is null)
+            {
+                return new(ScanOutcome.Problem, "Not a Kids label", "Find the child on Check In instead.");
+            }
+
+            var child = checkIn.Youth;
+            var parent = $"{child.ParentName} {child.ParentSurname} · {child.ParentCellNo}";
+            var checkedInOn = DateOnly.FromDateTime(Local(checkIn.Timestamp));
+            if (checkedInOn != DateOnly.FromDateTime(DateTime.Today))
+            {
+                return new(ScanOutcome.Problem, $"{child.FullName}: old label", $"From {checkedInOn:dddd d MMMM}. Find them on Check In instead.");
+            }
+            if (checkIn.CheckedOutAt is { } earlier)
+            {
+                return new(ScanOutcome.Already, $"{child.FullName}: already checked out at {Local(earlier):HH:mm}", parent);
+            }
+            if (await CheckInService.CheckOutAsync(checkIn.Id, group) is null)
+            {
+                return new(ScanOutcome.Problem, $"{child.FullName}: not checked out", "Their check-in has been undone.");
+            }
+            return new(ScanOutcome.Out, $"{child.FullName} checked out", parent, checkIn.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Checking out a scanned label failed");
+            return new(ScanOutcome.Problem, "Couldn't check out", "Something went wrong. Scan the label again.");
+        }
+    }
+
+    private async Task UndoAsync(ScanResult scan, int checkInId)
+    {
+        try
+        {
+            if (await CheckInService.UndoCheckOutAsync(checkInId, group))
+            {
+                scan.Outcome = ScanOutcome.Undone;
+                scan.Title = scan.Title.Replace(" checked out", ": check-out undone");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Undoing the check-out of check-in {CheckInId} failed", checkInId);
+        }
+    }
+
+    // A label's QR code is its check-out link (http://…/out/CODE); a bare code works too.
+    private static string CodeFrom(string text)
+    {
+        text = text.Trim();
+        var slash = text.LastIndexOf("/out/", StringComparison.OrdinalIgnoreCase);
+        return (slash >= 0 ? text[(slash + 5)..] : text).TrimEnd('/').ToUpperInvariant();
+    }
+
+    private async Task SignalAsync(bool ok)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("sgScan.signal", ok);
+        }
+        catch (JSException)
+        {
+            // No beep: the screen still says what happened.
+        }
+    }
+
+    private static DateTime Local(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local);
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("sgScan.stop");
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException)
+        {
+            // The page has gone, and the camera with it.
+        }
+        self?.Dispose();
+    }
+}

@@ -63,6 +63,10 @@
         }
 
         <a href="/register" class="register-link">+ Register a new @group.PersonNoun()</a>
+        @if (group.HasCheckOut())
+        {
+            <a href="/scan" class="register-link">Scan to check out</a>
+        }
     </div>
 
     @if (selected is not null)
