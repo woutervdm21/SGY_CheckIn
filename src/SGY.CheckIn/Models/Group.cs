@@ -77,6 +77,9 @@ public static class GroupExtensions
     /// <summary>Kids and Youth can be in Care Village.</summary>
     public static bool HasCareVillage(this Group group) => group != Group.YoungAdults;
 
+    /// <summary>Kids are checked out when they're collected, by the QR code on their label.</summary>
+    public static bool HasCheckOut(this Group group) => group == Group.Kids;
+
     /// <summary>Kids can be with CMR.</summary>
     public static bool HasCmr(this Group group) => group == Group.Kids;
 

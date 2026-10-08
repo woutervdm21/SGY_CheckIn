@@ -132,9 +132,26 @@
                    is for a youth checked in by mistake, so it asks first. Straight after
                    checking someone in, this is the confirmation that it worked. *@
                 <div class="already-checked-in @(justCheckedIn ? "just-now" : "")" role="status">
-                    <span class="already-checked-in-title">@(justCheckedIn ? "Checked in" : "Already checked in")</span>
-                    <span class="already-checked-in-time">at @FormatLocalTime(todayCheckIn.Timestamp)</span>
+                    <span class="already-checked-in-title">@(todayCheckIn.CheckedOutAt is not null ? "Checked out" : justCheckedIn ? "Checked in" : "Already checked in")</span>
+                    <span class="already-checked-in-time">
+                        @(todayCheckIn.CheckedOutAt is { } outAt
+                            ? $"in at {FormatLocalTime(todayCheckIn.Timestamp)}, out at {FormatLocalTime(outAt)}"
+                            : $"at {FormatLocalTime(todayCheckIn.Timestamp)}")
+                    </span>
                 </div>
+
+                @* Kids: normally checked out by scanning their label; this is for a lost label. *@
+                @if (group.HasCheckOut() && !justCheckedIn)
+                {
+                    @if (todayCheckIn.CheckedOutAt is null)
+                    {
+                        <button type="button" class="checkin-button secondary" @onclick="DoCheckOut">Check out</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="undo-checkin-button" @onclick="UndoCheckOut">Undo check-out</button>
+                    }
+                }
 
                 @if (!confirmingUndo)
                 {
@@ -178,6 +195,10 @@
     <a href="/admin/log" class="today-summary">
         <span class="today-count">@todayCount</span>
         <span class="today-label">checked in today</span>
+        @if (group.HasCheckOut())
+        {
+            <CheckOutProgress CheckedIn="todayCount" CheckedOut="todayCheckedOut" />
+        }
     </a>
 </div>
 
@@ -207,6 +228,7 @@
     [SupplyParameterFromQuery(Name = "youth")]
     private int? ReturningYouthId { get; set; }
     private int todayCount;
+    private int todayCheckedOut;
     private bool needsFocus = true;
 
     [CascadingParameter]
@@ -219,7 +241,7 @@
         Labels.Changed += OnPrintingChanged;
 
         group = await AuthState.GetGroupAsync();
-        todayCount = await CheckInService.GetTodayCountAsync(group);
+        await LoadTodayCountsAsync();
 
         if (ReturningYouthId is { } id && await YouthService.GetByIdAsync(id, group) is { IsArchived: false } youth)
         {
@@ -325,7 +347,7 @@
 
         var child = selected;
         Toasts.ShowSuccess($"{child.FullName} checked in at {FormatLocalTime(DateTime.UtcNow)}");
-        todayCount = await CheckInService.GetTodayCountAsync(group);
+        await LoadTodayCountsAsync();
 
         // Their details stay up as "Checked in" so the volunteer sees it worked; the search
         // box empties and takes the cursor for the next person, and typing replaces them.
@@ -368,8 +390,63 @@
         todayCheckIn = null;
         justCheckedIn = false;
         checkedInTodayIds.Remove(youth.Id);
-        todayCount = await CheckInService.GetTodayCountAsync(group);
+        await LoadTodayCountsAsync();
         Toasts.ShowSuccess($"{youth.FullName}'s check-in undone");
+    }
+
+    private async Task LoadTodayCountsAsync()
+    {
+        todayCount = await CheckInService.GetTodayCountAsync(group);
+        todayCheckedOut = group.HasCheckOut() ? await CheckInService.GetTodayCheckedOutCountAsync(group) : 0;
+    }
+
+    // A lost label: the same as scanning it.
+    private async Task DoCheckOut()
+    {
+        if (selected is null || todayCheckIn is null)
+        {
+            return;
+        }
+        try
+        {
+            if (await CheckInService.CheckOutAsync(todayCheckIn.Id, group) is { } outAt)
+            {
+                todayCheckIn.CheckedOutAt = outAt;
+                Toasts.ShowSuccess($"{selected.Name} checked out");
+            }
+            else
+            {
+                Toasts.ShowError($"Couldn't check {selected.Name} out: their check-in has been undone.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Checking out check-in {CheckInId} failed", todayCheckIn.Id);
+            Toasts.ShowError($"Couldn't check {selected.Name} out. Please try again.");
+            return;
+        }
+        await LoadTodayCountsAsync();
+    }
+
+    private async Task UndoCheckOut()
+    {
+        if (selected is null || todayCheckIn is null)
+        {
+            return;
+        }
+        try
+        {
+            await CheckInService.UndoCheckOutAsync(todayCheckIn.Id, group);
+            todayCheckIn.CheckedOutAt = null;
+            Toasts.ShowSuccess($"{selected.Name} is checked in again");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Undoing the check-out of check-in {CheckInId} failed", todayCheckIn.Id);
+            Toasts.ShowError("Couldn't undo the check-out. Please try again.");
+            return;
+        }
+        await LoadTodayCountsAsync();
     }
 
     // This device's label setting read (it decides whether Print label shows).

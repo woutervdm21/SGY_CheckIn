@@ -49,6 +49,10 @@
             <div class="stat-tile">
                 <span class="stat-value">@todayCount</span>
                 <span class="stat-label">Checked in today</span>
+                @if (group.HasCheckOut())
+                {
+                    <CheckOutProgress CheckedIn="todayCount" CheckedOut="todayCheckedOut" />
+                }
             </div>
             <div class="stat-tile">
                 <span class="stat-value">@report.UniqueYouth</span>
@@ -262,6 +266,7 @@
     private int presetCount;
     private AttendanceReport? report;
     private int todayCount;
+    private int todayCheckedOut;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
@@ -272,6 +277,7 @@
     {
         group = await AuthState.GetGroupAsync();
         todayCount = await CheckInService.GetTodayCountAsync(group);
+        todayCheckedOut = group.HasCheckOut() ? await CheckInService.GetTodayCheckedOutCountAsync(group) : 0;
         await Load();
         await LoadArchiveSuggestions();
         birthdays = await Reporting.GetUpcomingBirthdaysAsync(group);

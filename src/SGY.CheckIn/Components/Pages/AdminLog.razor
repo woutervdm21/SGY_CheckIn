@@ -23,12 +23,23 @@
     }
     else
     {
-        <p class="log-count">@checkIns.Count check-in@(checkIns.Count == 1 ? "" : "s")</p>
+        <p class="log-count">
+            @checkIns.Count check-in@(checkIns.Count == 1 ? "" : "s")
+            @if (group.HasCheckOut())
+            {
+                var checkedOut = checkIns.Count(c => c.CheckedOutAt is not null);
+                <span> · @checkedOut checked out · @(checkIns.Count - checkedOut) not checked out</span>
+            }
+        </p>
         <div class="log-table-wrap">
             <table class="log-table">
                 <thead>
                     <tr>
                         <th>Time</th>
+                        @if (group.HasCheckOut())
+                        {
+                            <th>Out</th>
+                        }
                         <th>Name</th>
                         @if (group != Group.YoungAdults)
                         {
@@ -42,6 +53,10 @@
                     {
                         <tr>
                             <td>@FormatLocalTime(c.Timestamp)</td>
+                            @if (group.HasCheckOut())
+                            {
+                                <td>@(c.CheckedOutAt is { } outAt ? FormatLocalTime(outAt) : "–")</td>
+                            }
                             <td>@c.Youth.FullName</td>
                             @if (group != Group.YoungAdults)
                             {
@@ -63,7 +78,7 @@
                         @if (confirmingUndoId == c.Id)
                         {
                             <tr class="log-undo-confirm">
-                                <td colspan="@(group != Group.YoungAdults ? 4 : 3)">
+                                <td colspan="@((group != Group.YoungAdults ? 4 : 3) + (group.HasCheckOut() ? 1 : 0))">
                                     <p>Undo @c.Youth.FullName's check-in at @FormatLocalTime(c.Timestamp)? Are you sure?</p>
                                     <div class="archive-confirm-actions">
                                         <button type="button" class="archive-confirm-button" @onclick="() => DoUndo(c)">Yes, undo</button>

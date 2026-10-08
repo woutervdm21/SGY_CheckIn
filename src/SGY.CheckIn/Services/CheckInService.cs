@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using SGY.CheckIn.Data;
 using SGY.CheckIn.Models;
@@ -20,6 +21,10 @@ public class CheckInService(IDbContextFactory<AppDbContext> dbFactory)
             throw new InvalidOperationException($"Person {youthId} isn't in {group}.");
         }
         var record = new CheckInRecord { YouthId = youthId, Timestamp = DateTime.UtcNow };
+        if (group.HasCheckOut())
+        {
+            record.CheckOutCode = await NewCheckOutCodeAsync(db, ct);
+        }
         db.CheckIns.Add(record);
         await db.SaveChangesAsync(ct);
         return record;
@@ -67,6 +72,87 @@ public class CheckInService(IDbContextFactory<AppDbContext> dbFactory)
             .FirstOrDefaultAsync(ct);
     }
 
+    /// <summary>
+    /// The check-out code for the label of a child checked in today, or null if they aren't.
+    /// A check-in from before check-outs (the day the app is updated) gets one now.
+    /// </summary>
+    public async Task<string?> GetTodayCheckOutCodeAsync(int youthId, Group group, CancellationToken ct = default)
+    {
+        if (!group.HasCheckOut())
+        {
+            return null;
+        }
+        var (utcStart, utcEnd) = LocalDayRangeUtc(DateOnly.FromDateTime(DateTime.Now));
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var record = await db.CheckIns
+            .Where(c => c.YouthId == youthId && c.Youth.Group == group && c.Timestamp >= utcStart && c.Timestamp < utcEnd)
+            .OrderByDescending(c => c.Timestamp)
+            .FirstOrDefaultAsync(ct);
+        if (record is { CheckOutCode: null })
+        {
+            record.CheckOutCode = await NewCheckOutCodeAsync(db, ct);
+            await db.SaveChangesAsync(ct);
+        }
+        return record?.CheckOutCode;
+    }
+
+    /// <summary>
+    /// The check-in a label's QR code is for, with the child loaded. Null if no check-in in
+    /// this group has that code.
+    /// </summary>
+    public async Task<CheckInRecord?> FindByCheckOutCodeAsync(string code, Group group, CancellationToken ct = default)
+    {
+        code = code.Trim().ToUpperInvariant();
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.CheckIns.AsNoTracking()
+            .Include(c => c.Youth)
+            .FirstOrDefaultAsync(c => c.CheckOutCode == code && c.Youth.Group == group, ct);
+    }
+
+    /// <summary>
+    /// Checks a child out: today's check-ins only, so an old label does nothing. Returns the
+    /// time they were checked out (earlier, if someone already had), or null if it's not
+    /// today's check-in, or not one of this group's.
+    /// </summary>
+    public async Task<DateTime?> CheckOutAsync(int checkInId, Group group, CancellationToken ct = default)
+    {
+        if (!group.HasCheckOut())
+        {
+            return null;
+        }
+        var (utcStart, utcEnd) = LocalDayRangeUtc(DateOnly.FromDateTime(DateTime.Now));
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var now = DateTime.UtcNow;
+        var today = db.CheckIns.Where(c => c.Id == checkInId && c.Youth.Group == group && c.Timestamp >= utcStart && c.Timestamp < utcEnd);
+        // Only if still in: a second scan keeps the first time.
+        await today.Where(c => c.CheckedOutAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.CheckedOutAt, now), ct);
+        return await today.Select(c => c.CheckedOutAt).FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>Undoes a check-out from today, for a child checked out by mistake. False if there was none.</summary>
+    public async Task<bool> UndoCheckOutAsync(int checkInId, Group group, CancellationToken ct = default)
+    {
+        var (utcStart, utcEnd) = LocalDayRangeUtc(DateOnly.FromDateTime(DateTime.Now));
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var undone = await db.CheckIns
+            .Where(c => c.Id == checkInId && c.Youth.Group == group && c.Timestamp >= utcStart && c.Timestamp < utcEnd && c.CheckedOutAt != null)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.CheckedOutAt, (DateTime?)null), ct);
+        return undone > 0;
+    }
+
+    /// <summary>How many different people in this group were checked in today and have since been checked out.</summary>
+    public async Task<int> GetTodayCheckedOutCountAsync(Group group, CancellationToken ct = default)
+    {
+        var (utcStart, utcEnd) = LocalDayRangeUtc(DateOnly.FromDateTime(DateTime.Now));
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.CheckIns.AsNoTracking()
+            .Where(c => c.Youth.Group == group && c.Timestamp >= utcStart && c.Timestamp < utcEnd && c.CheckedOutAt != null)
+            .Select(c => c.YouthId)
+            .Distinct()
+            .CountAsync(ct);
+    }
+
     /// <summary>IDs of this group's people already checked in today, for annotating search results in bulk.</summary>
     public async Task<HashSet<int>> GetTodayCheckedInYouthIdsAsync(Group group, CancellationToken ct = default)
     {
@@ -102,6 +188,22 @@ public class CheckInService(IDbContextFactory<AppDbContext> dbFactory)
             .Where(c => c.Youth.Group == group && c.Timestamp >= utcStart && c.Timestamp < utcEnd)
             .OrderByDescending(c => c.Timestamp)
             .ToListAsync(ct);
+    }
+
+    // 8 characters from 31 that can't be mixed up (no 0/O, 1/I/L): short enough for a small
+    // QR code, and far too many to guess.
+    private const string CodeAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+    private static async Task<string> NewCheckOutCodeAsync(AppDbContext db, CancellationToken ct)
+    {
+        while (true)
+        {
+            var code = RandomNumberGenerator.GetString(CodeAlphabet, 8);
+            if (!await db.CheckIns.AnyAsync(c => c.CheckOutCode == code, ct))
+            {
+                return code;
+            }
+        }
     }
 
     private static (DateTime UtcStart, DateTime UtcEnd) LocalDayRangeUtc(DateOnly localDate)

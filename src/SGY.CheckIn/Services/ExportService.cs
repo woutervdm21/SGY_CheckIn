@@ -109,8 +109,10 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
             .ToListAsync(ct);
 
         var columns = PersonColumns(filter.Group);
+        // Kids: when they were collected, or blank if they weren't checked out.
+        var checkOut = filter.Group.HasCheckOut();
         var csv = new CsvWriter();
-        csv.Row(["Check-in ID", "Date", "Time", .. columns.Select(c => c.Header)]);
+        csv.Row(["Check-in ID", "Date", "Time", .. (checkOut ? ["Checked out"] : Array.Empty<string>()), .. columns.Select(c => c.Header)]);
         foreach (var c in rows)
         {
             var local = ToLocal(c.Timestamp);
@@ -118,6 +120,7 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
                 c.Id.ToString(CultureInfo.InvariantCulture),
                 local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 local.ToString("HH:mm", CultureInfo.InvariantCulture),
+                .. (checkOut ? [c.CheckedOutAt is { } outAt ? ToLocal(outAt).ToString("HH:mm", CultureInfo.InvariantCulture) : ""] : Array.Empty<string>()),
                 .. columns.Select(col => col.Value(c.Youth)),
             ]);
         }

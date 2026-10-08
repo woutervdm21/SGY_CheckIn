@@ -128,6 +128,29 @@ came on last. If the chosen one is off, or doesn't print, the label goes to the 
 **Print label** on a child's details prints another copy at any time, the same way: on this
 computer, or on the print station. Choose **Don't print** on a device that should never print.
 
+## Checking Kids out
+
+Once a child is checked in, their label has a **QR code**. When they're collected, a
+volunteer scans it with their phone's ordinary camera app and opens the link: that checks
+the child out straight away. The page then shows the parent's name and cell, to check
+against whoever is collecting them, and **Undo check-out** for a label scanned by mistake.
+
+- The phone has to be signed in to **Kids** in the browser the camera opens (Chrome on most
+  Android phones, Safari on an iPhone). If it isn't, the app asks to sign in first, then
+  carries on.
+- Each label only works on the day it was printed, so an old label can't check a child out.
+  Scanning it again shows when they were checked out.
+- The QR code holds the address the label printer computer has the app open on (the Pi's
+  address), which the phones use too. If the app runs on that computer itself and is open
+  on `localhost`, the QR code uses the computer's network address instead. Where that
+  guess is wrong, set `PublicAddress` (e.g. `http://192.168.0.10:8080`) in the app's
+  settings.
+- No label, or it won't scan? Find the child on Check In and press **Check out** there.
+- Checked out by mistake? **Undo check-out**, on the scan page or on Check In.
+
+Check In and the dashboard show how many children were checked out today. The **Log** shows
+each child's check-out time, and the check-in export has a *Checked out* column.
+
 ## Dashboard (admins only)
 
 The **Dashboard** page shows how the group you are signed in to is doing over any stretch of

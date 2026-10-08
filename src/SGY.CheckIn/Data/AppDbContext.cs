@@ -17,6 +17,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<CheckInRecord>()
             .HasIndex(c => c.Timestamp);
+        modelBuilder.Entity<CheckInRecord>()
+            .HasIndex(c => c.CheckOutCode)
+            .IsUnique();
 
         modelBuilder.Entity<CheckInRecord>()
             .HasOne(c => c.Youth)

@@ -242,9 +242,9 @@ app.MapGet("/admin/backups/{name}", (string name, BackupService backups) =>
 // A child's check-in label, as a page sized to one DYMO label. The check-in screen loads it
 // in a hidden frame and prints it. A plain endpoint rather than a Blazor page, so each label
 // doesn't start an interactive circuit of its own. Anyone signed in to Kids can print one.
-app.MapGet("/labels/{id:int}", async (int id, HttpContext http, LabelService labels, CancellationToken ct) =>
+app.MapGet("/labels/{id:int}", async (int id, HttpContext http, LabelService labels, IConfiguration config, CancellationToken ct) =>
     !PageGroupMatches(http) ? GroupChangedResult()
-    : await labels.RenderAsync(id, http.User.GetGroup(), ct) is { } html
+    : await labels.RenderAsync(id, http.User.GetGroup(), AppAddress.For(http.Request, config), ct) is { } html
         ? Results.Content(html, "text/html; charset=utf-8")
         : Results.NotFound()
 ).RequireAuthorization();

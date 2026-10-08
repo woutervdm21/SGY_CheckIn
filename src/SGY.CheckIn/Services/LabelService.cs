@@ -1,5 +1,7 @@
+using System.Text;
 using System.Text.Encodings.Web;
 using Microsoft.EntityFrameworkCore;
+using QRCoder;
 using SGY.CheckIn.Data;
 using SGY.CheckIn.Models;
 
@@ -28,16 +30,25 @@ namespace SGY.CheckIn.Services;
 /// and the age they turn (or turned) in place of their age today.
 /// Dots under the date mark a child with CMR (one) or in Care Village (two); never both.
 /// They're for volunteers who know to look for them, so nothing on the label explains them.
+///
+/// Once the child is checked in, a QR code beside their name links to the page that checks
+/// them out (/out/{code}, see <see cref="CheckInRecord.CheckOutCode"/>): any phone's camera
+/// app opens it. The link uses the address the printing computer has the app open on, which
+/// is the one the volunteers' phones use too (see <see cref="AppAddress"/>).
 /// </remarks>
-public class LabelService(IDbContextFactory<AppDbContext> dbFactory)
+public class LabelService(IDbContextFactory<AppDbContext> dbFactory, CheckInService checkIns)
 {
     // Setting value "light" for the light style; anything else (or none) is the dark one.
     private const string StyleKey = "LabelStyle";
     // A LabelSize.Key; none means Large Address.
     private const string SizeKey = "LabelSize";
 
-    /// <summary>Null if there's no such child in this group, or the group doesn't print labels.</summary>
-    public async Task<string?> RenderAsync(int id, Group group, CancellationToken ct = default)
+    /// <summary>
+    /// Null if there's no such child in this group, or the group doesn't print labels.
+    /// <paramref name="appAddress"/> is where the app is reached ("http://192.168.0.10:8080"),
+    /// for the check-out QR code.
+    /// </summary>
+    public async Task<string?> RenderAsync(int id, Group group, string appAddress, CancellationToken ct = default)
     {
         if (!group.PrintsLabels())
         {
@@ -47,7 +58,15 @@ public class LabelService(IDbContextFactory<AppDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var child = await db.Youths.AsNoTracking()
             .FirstOrDefaultAsync(y => y.Id == id && y.Group == group, ct);
-        return child is null ? null : Render(child, await IsLightAsync(db, ct), await GetSizeAsync(db, ct));
+        if (child is null)
+        {
+            return null;
+        }
+
+        // No QR before they're checked in today: there's nothing to check out.
+        var code = await checkIns.GetTodayCheckOutCodeAsync(id, group, ct);
+        var checkOutUrl = code is null ? null : $"{appAddress.TrimEnd('/')}/out/{code}";
+        return Render(child, await IsLightAsync(db, ct), await GetSizeAsync(db, ct), checkOutUrl);
     }
 
     /// <summary>The label the printers are loaded with.</summary>
@@ -90,7 +109,7 @@ public class LabelService(IDbContextFactory<AppDbContext> dbFactory)
         LabelSize.FromKey(await db.Settings.AsNoTracking()
             .Where(s => s.Key == SizeKey).Select(s => s.Value).FirstOrDefaultAsync(ct));
 
-    private static string Render(Youth child, bool light, LabelSize size)
+    private static string Render(Youth child, bool light, LabelSize size, string? checkOutUrl)
     {
         // CSS and script numbers in invariant culture: "1.35", never "1,35".
         static string N(double value) => value.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
@@ -123,6 +142,7 @@ public class LabelService(IDbContextFactory<AppDbContext> dbFactory)
               </svg>
               """;
         var dots = child.InCmr ? 1 : child.InCareVillage ? 2 : 0;
+        var qr = checkOutUrl is null ? "" : QrSvg(checkOutUrl);
 
         // Nothing at all when there are no medical notes, so the box only ever means something.
         var medical = string.IsNullOrWhiteSpace(child.Medical)
@@ -191,6 +211,10 @@ public class LabelService(IDbContextFactory<AppDbContext> dbFactory)
                     display: flex; flex-direction: column;
                 }
                 .body > * { flex-shrink: 0; }
+                /* The names, with the check-out QR code beside them once the child is checked in. */
+                .head { display: flex; align-items: flex-start; gap: calc(2mm * var(--s)); }
+                .names { flex: 1; min-width: 0; }
+                .qr { flex: none; width: max(11mm, calc(13mm * var(--s))); height: max(11mm, calc(13mm * var(--s))); margin-top: calc(0.6mm * var(--s)); }
                 .first-name {
                     font-size: calc(34pt * var(--s)); font-weight: 800; letter-spacing: -0.02em; line-height: 1;
                     white-space: nowrap; overflow: hidden;
@@ -226,8 +250,13 @@ public class LabelService(IDbContextFactory<AppDbContext> dbFactory)
                     <p class="dots">{{string.Concat(Enumerable.Repeat("<i></i>", dots))}}</p>
                 </div>
                 <div class="body" id="body">
-                    <p class="first-name" id="first-name">{{E(firstName)}}</p>
-                    <p class="rest-of-name">{{E(restOfName)}}</p>
+                    <div class="head">
+                        <div class="names">
+                            <p class="first-name" id="first-name">{{E(firstName)}}</p>
+                            <p class="rest-of-name">{{E(restOfName)}}</p>
+                        </div>
+                        {{qr}}
+                    </div>
                     <div class="spacer"></div>
                     {{medical}}
                     <div class="parent-block">
@@ -283,5 +312,36 @@ public class LabelService(IDbContextFactory<AppDbContext> dbFactory)
             </body>
             </html>
             """;
+    }
+
+    // The QR code as an SVG drawn module by module, so it prints sharp at any size. Medium
+    // error correction, to survive a smudge or a crease. A narrow quiet zone (normally four
+    // modules): the label around it is blank anyway, and the code stays bigger.
+    private static string QrSvg(string text)
+    {
+        using var data = QRCodeGenerator.GenerateQrCode(text, QRCodeGenerator.ECCLevel.M);
+        var matrix = data.ModuleMatrix;   // includes a four-module quiet zone all round
+        const int Trim = 2;
+        var size = matrix.Count - 2 * Trim;
+        var path = new StringBuilder();
+        for (var y = 0; y < size; y++)
+        {
+            var row = matrix[y + Trim];
+            for (var x = 0; x < size;)
+            {
+                if (!row[x + Trim])
+                {
+                    x++;
+                    continue;
+                }
+                var start = x;
+                while (x < size && row[x + Trim])
+                {
+                    x++;
+                }
+                path.Append($"M{start} {y}h{x - start}v1h-{x - start}z");
+            }
+        }
+        return $"""<svg class="qr" viewBox="0 0 {size} {size}" shape-rendering="crispEdges" aria-hidden="true"><path d="{path}"/></svg>""";
     }
 }

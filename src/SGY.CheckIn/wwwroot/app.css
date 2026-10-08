@@ -981,6 +981,13 @@ input.search-box {
     border-color: color-mix(in srgb, var(--success) 40%, transparent);
 }
 
+/* While the check-out page checks the child out: neither done nor a warning yet. */
+.already-checked-in.pending {
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    border-color: var(--border);
+}
+
 .already-checked-in-title {
     font-family: var(--font-display);
     font-weight: 700;
@@ -2713,3 +2720,63 @@ input[type=checkbox] {
         height: 30px;
     }
 }
+
+/* The page a Kids label's QR code opens: one child, one big Check out button. */
+.checkout-page {
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+/* Kids: today's check-outs as a bar that fills as children are collected (CheckOutProgress). */
+.checkout-progress {
+    width: 100%;
+    max-width: 320px;
+    margin-top: var(--space-2);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.checkout-progress-bar {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+    .checkout-progress-bar span {
+        display: block;
+        height: 100%;
+        min-width: 0;
+        border-radius: inherit;
+        background: var(--success);
+        transition: width .4s ease;
+    }
+
+.checkout-progress-text {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+    .checkout-progress-text strong {
+        color: var(--text);
+    }
+
+/* Everyone collected: the bar and its numbers go green. */
+.checkout-progress.all-out .checkout-progress-text {
+    color: var(--success);
+}
+
+.stat-tile .checkout-progress {
+    max-width: none;
+}
+
+    .stat-tile .checkout-progress-text {
+        font-size: 0.78rem;
+        text-align: left;
+    }

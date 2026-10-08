@@ -1,0 +1,206 @@
+@page "/out/{Code}"
+@attribute [Authorize]
+@inject CheckInService CheckInService
+@inject ToastService Toasts
+@inject ILogger<CheckOut> Logger
+
+<PageTitle>Check Out — SG Check-In</PageTitle>
+
+@* Opened by scanning the QR code on a Kids label with a phone's camera, and checks the child
+   out straight away: scan, open the link, done. Only once the page is live in a signed-in
+   Kids browser, never while it's first drawn on the server, so a link preview or a page
+   fetched ahead of time doesn't check anyone out. Then the parent's details, to match
+   against whoever is collecting them, and Undo for a label scanned by mistake. *@
+<div class="checkout-page">
+    @if (!loaded)
+    {
+        <p class="empty-state">Loading…</p>
+    }
+    else if (!group.HasCheckOut())
+    {
+        <h1>Check out</h1>
+        <p class="page-subtitle">Children are checked out in Kids. Sign out, sign in to Kids, then scan the label again.</p>
+        <a href="/" class="cancel-link">Back to Check In</a>
+    }
+    else if (checkIn is null)
+    {
+        <h1>Label not found</h1>
+        <p class="page-subtitle">This QR code isn't from a Kids label in the app. Find the child on Check In instead.</p>
+        <a href="/" class="cancel-link">Back to Check In</a>
+    }
+    else if (!IsToday(checkIn))
+    {
+        <h1>Old label</h1>
+        <p class="page-subtitle">
+            This is @checkIn.Youth.Name's label from @Local(checkIn.Timestamp).ToString("dddd d MMMM yyyy").
+            Only today's label checks a child out.
+        </p>
+        <a href="/" class="cancel-link">Back to Check In</a>
+    }
+    else
+    {
+        var child = checkIn.Youth;
+        <div class="detail-panel">
+            <div class="detail-header">
+                <div>
+                    <h2>@child.FullName</h2>
+                    @if (group.Describe(child, Today) is { } description)
+                    {
+                        <p class="detail-grade">@description</p>
+                    }
+                </div>
+            </div>
+
+            <dl class="detail-list">
+                <div>
+                    <dt>Parent / guardian</dt>
+                    <dd>@child.ParentName @child.ParentSurname</dd>
+                </div>
+                <div>
+                    <dt>Parent's cell</dt>
+                    <dd>@child.ParentCellNo</dd>
+                </div>
+                <div>
+                    <dt>Checked in</dt>
+                    <dd>@FormatLocalTime(checkIn.Timestamp)</dd>
+                </div>
+            </dl>
+
+            @if (checkIn.CheckedOutAt is { } outAt)
+            {
+                <div class="already-checked-in @(justCheckedOut ? "just-now" : "")" role="status">
+                    <span class="already-checked-in-title">@(justCheckedOut ? "Checked out" : "Already checked out")</span>
+                    <span class="already-checked-in-time">at @FormatLocalTime(outAt)</span>
+                </div>
+
+                @if (!confirmingUndo)
+                {
+                    <button type="button" class="undo-checkin-button" @onclick="() => confirmingUndo = true">Undo check-out</button>
+                }
+                else
+                {
+                    <div class="undo-confirm">
+                        <p>Undo @child.Name's check-out at @FormatLocalTime(outAt)? They'll show as still here.</p>
+                        <div class="archive-confirm-actions">
+                            <button type="button" class="archive-confirm-button" @onclick="UndoCheckOut">Yes, undo</button>
+                            <button type="button" class="cancel-link" @onclick="() => confirmingUndo = false">Cancel</button>
+                        </div>
+                    </div>
+                }
+            }
+            else if (!autoTried || busy)
+            {
+                <div class="already-checked-in pending" role="status">
+                    <span class="already-checked-in-title">Checking out…</span>
+                </div>
+            }
+            else
+            {
+                @* Only if checking out on opening didn't work. *@
+                <button type="button" class="checkin-button" disabled="@busy" @onclick="DoCheckOut">Check out @child.Name</button>
+            }
+        </div>
+
+        <a href="/" class="cancel-link">Back to Check In</a>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string Code { get; set; } = "";
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Group group = Group.Youth;
+    private CheckInRecord? checkIn;
+    private bool loaded;
+    private bool busy;
+    private bool justCheckedOut;
+    private bool confirmingUndo;
+    private bool autoTried;
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        group = await AuthState.GetGroupAsync();
+        checkIn = group.HasCheckOut() ? await CheckInService.FindByCheckOutCodeAsync(Code, group) : null;
+        justCheckedOut = false;
+        confirmingUndo = false;
+        loaded = true;
+    }
+
+    // Only here, once the page is live: never during the first, server-side drawing.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !autoTried)
+        {
+            if (checkIn is { CheckedOutAt: null } && IsToday(checkIn))
+            {
+                await DoCheckOut();
+            }
+            autoTried = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DoCheckOut()
+    {
+        if (checkIn is null || busy)
+        {
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            if (await CheckInService.CheckOutAsync(checkIn.Id, group) is { } outAt)
+            {
+                checkIn.CheckedOutAt = outAt;
+                justCheckedOut = true;
+            }
+            else
+            {
+                Toasts.ShowError($"Couldn't check {checkIn.Youth.Name} out: their check-in has been undone or isn't from today.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Checking out check-in {CheckInId} failed", checkIn.Id);
+            Toasts.ShowError($"Couldn't check {checkIn.Youth.Name} out. Please try again.");
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task UndoCheckOut()
+    {
+        if (checkIn is null)
+        {
+            return;
+        }
+
+        confirmingUndo = false;
+        try
+        {
+            await CheckInService.UndoCheckOutAsync(checkIn.Id, group);
+            checkIn.CheckedOutAt = null;
+            justCheckedOut = false;
+            Toasts.ShowSuccess($"{checkIn.Youth.Name} is checked in again.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Undoing the check-out of check-in {CheckInId} failed", checkIn.Id);
+            Toasts.ShowError("Couldn't undo the check-out. Please try again.");
+        }
+    }
+
+    private static bool IsToday(CheckInRecord record) => DateOnly.FromDateTime(Local(record.Timestamp)) == Today;
+
+    private static DateTime Local(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local);
+
+    private static string FormatLocalTime(DateTime utc) => Local(utc).ToString("HH:mm");
+}

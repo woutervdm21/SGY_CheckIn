@@ -1,0 +1,24 @@
+@* Kids: how many of today's children have been collected, as a bar filling up through the
+   evening, with the count still here (the number that matters at the end). *@
+@if (CheckedIn > 0)
+{
+    var percent = (int)Math.Round(100.0 * CheckedOut / CheckedIn);
+    <div class="checkout-progress @(CheckedOut >= CheckedIn ? "all-out" : "")">
+        <div class="checkout-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="@CheckedIn" aria-valuenow="@CheckedOut"
+             aria-label="Checked out">
+            <span style="width: @(percent)%"></span>
+        </div>
+        <p class="checkout-progress-text">
+            <strong>@CheckedOut</strong> of @CheckedIn checked out (@percent%)
+            · <strong>@(CheckedIn - CheckedOut)</strong> still here
+        </p>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public int CheckedIn { get; set; }
+
+    [Parameter, EditorRequired]
+    public int CheckedOut { get; set; }
+}
