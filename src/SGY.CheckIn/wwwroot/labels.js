@@ -1,21 +1,37 @@
 // Printing Kids' check-in labels from the browser to the DYMO LabelWriter.
 //
-// Only the computer the printer is plugged into should print, so each device remembers
-// for itself whether it's "the label printer" (localStorage: phones and tablets stay off).
+// Each device remembers for itself (localStorage) what it does with a label: print it here
+// (the computer with the DYMO, which then also prints the labels phones send it), send it
+// to that computer (a phone or tablet), or nothing. LabelPrinting.cs does the rest.
 // Printing loads the label page into a hidden frame and prints just that frame; with
 // Chrome started with --kiosk-printing it goes straight to the default printer, no dialog.
 window.sgLabels = {
-    key: 'sg-label-printer',
+    keys: { mode: 'sg-label-mode', name: 'sg-label-station-name', target: 'sg-label-target' },
 
-    isPrinter() {
-        try { return localStorage.getItem(this.key) === '1'; } catch { return false; }
+    // A new device sends its labels to the print station; only the computer with the DYMO
+    // is set to print them itself. Before there was a choice, devices just printed or not
+    // ('sg-label-printer'): one that printed still does.
+    settings() {
+        const read = key => { try { return localStorage.getItem(key); } catch { return null; } };
+        const mode = read(this.keys.mode) ?? (read('sg-label-printer') === '1' ? 'here' : 'station');
+        return { mode, name: read(this.keys.name) ?? '', target: read(this.keys.target) ?? '' };
     },
 
-    setPrinter(on) {
+    save(key, value) {
         try {
-            if (on) localStorage.setItem(this.key, '1');
-            else localStorage.removeItem(this.key);
-        } catch { /* private window: the switch just won't be remembered */ }
+            localStorage.setItem(this.keys[key], value);
+        } catch { /* private window: the setting just won't be remembered */ }
+    },
+
+    // Tells the app when another tab of this browser changes the setting, so every tab
+    // follows it: otherwise a tab still open as a print station keeps its old name.
+    watch(app) {
+        const keys = Object.values(this.keys);
+        window.addEventListener('storage', e => {
+            if (e.key === null || keys.includes(e.key)) {
+                app.invokeMethodAsync('ReloadAsync').catch(() => { });
+            }
+        });
     },
 
     // Resolves true once the label is loaded and handed to the printer, false if it
@@ -37,6 +53,9 @@ window.sgLabels = {
             frame.onload = resolve;
             frame.srcdoc = html;
         });
+
+        // The label sizes its text once its font has loaded; give that a moment, never forever.
+        await Promise.race([frame.contentWindow.sgLabelReady, new Promise(r => setTimeout(r, 3000))]);
 
         const remove = () => frame.remove();
         frame.contentWindow.addEventListener('afterprint', () => setTimeout(remove, 1000));

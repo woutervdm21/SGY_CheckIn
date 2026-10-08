@@ -11,8 +11,9 @@
 @using System.Linq.Expressions
 
 <div class="date-field">
+    @* data-date-mask: date-field.js types the slashes in as the date is typed. *@
     <input type="text" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off"
-           class="@CssClass" value="@text" @onchange="OnTextChanged" />
+           data-date-mask class="@CssClass" value="@text" @onchange="OnTextChanged" />
     <span class="date-field-picker">
         <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

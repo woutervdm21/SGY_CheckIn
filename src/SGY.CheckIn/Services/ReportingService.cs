@@ -19,6 +19,12 @@ public record YouthAttendance(int YouthId, string FullName, Grade? Grade, int Ev
 /// </summary>
 public record LapsedYouth(int YouthId, string FullName, Grade? Grade, DateOnly? LastSeen);
 
+/// <summary>A birthday coming up: the day, and the age they turn.</summary>
+public record UpcomingBirthday(int YouthId, string FullName, DateOnly Birthday, int Turns);
+
+/// <summary>Someone on the books the admin might archive, and why.</summary>
+public record ArchiveSuggestion(int YouthId, string FullName, IReadOnlyList<string> Reasons);
+
 /// <summary>Everything the admin dashboard shows for one date range.</summary>
 public record AttendanceReport(
     DateOnly From,
@@ -163,6 +169,91 @@ public class ReportingService(IDbContextFactory<AppDbContext> dbFactory)
             Missing: [.. missingAll.Take(10).Select(x => x.Youth)],
             MissingTotal: missingAll.Count);
     }
+
+    /// <summary>
+    /// Birthdays from today to a week from today, soonest first, for the leaders to plan a
+    /// fuss. Archived people are left out.
+    /// </summary>
+    public async Task<IReadOnlyList<UpcomingBirthday>> GetUpcomingBirthdaysAsync(Group group, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var people = await db.Youths.AsNoTracking()
+            .Where(y => y.Group == group && !y.IsArchived)
+            .Select(y => new { y.Id, y.Name, y.Surname, y.DateOfBirth })
+            .ToListAsync(ct);
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        return [.. people
+            .Select(p => (Person: p, Birthday: Birthdays.NearbyBirthday(p.DateOfBirth, today)))
+            .Where(x => x.Birthday is { } day && day >= today)
+            .Select(x => new UpcomingBirthday(x.Person.Id, $"{x.Person.Name} {x.Person.Surname}", x.Birthday!.Value, x.Birthday.Value.Year - x.Person.DateOfBirth.Year))
+            .OrderBy(b => b.Birthday)];
+    }
+
+    /// <summary>A year away counts as gone.</summary>
+    public const int AwayDays = 365;
+
+    /// <summary>Youth ends after the year they turn 18 (matric).</summary>
+    public const int YouthOldestAge = 18;
+
+    /// <summary>
+    /// People still on the books who've probably left: not seen for over a year (or
+    /// registered over a year ago and never seen), or too old for Kids or Youth. Archiving
+    /// stays the admin's call; this only points them out. Longest gone first.
+    /// </summary>
+    public async Task<IReadOnlyList<ArchiveSuggestion>> GetArchiveSuggestionsAsync(Group group, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var people = await db.Youths.AsNoTracking()
+            .Where(y => y.Group == group && !y.IsArchived)
+            .Select(y => new
+            {
+                y.Id,
+                y.Name,
+                y.Surname,
+                y.DateOfBirth,
+                y.CreatedAt,
+                LastCheckIn = (DateTime?)db.CheckIns
+                    .Where(c => c.YouthId == y.Id)
+                    .Max(c => (DateTime?)c.Timestamp),
+            })
+            .ToListAsync(ct);
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var cutoff = DateTime.UtcNow.AddDays(-AwayDays);
+        var suggestions = new List<(ArchiveSuggestion Suggestion, DateTime Since)>();
+        foreach (var p in people)
+        {
+            List<string> reasons = [];
+            if (p.LastCheckIn is { } seen && seen < cutoff)
+            {
+                reasons.Add($"Not seen for over a year (last on {ToLocalDate(seen):d MMM yyyy})");
+            }
+            else if (p.LastCheckIn is null && p.CreatedAt < cutoff)
+            {
+                reasons.Add($"Never checked in since registering on {ToLocalDate(p.CreatedAt):d MMM yyyy}");
+            }
+
+            var turns = KidsMinistries.AgeThisYear(p.DateOfBirth, today);
+            if (group == Group.Kids && KidsMinistries.IsTooOld(p.DateOfBirth, today))
+            {
+                reasons.Add($"Turns {turns} this year: too old for Kids, which ends at {KidsMinistries.OldestAge}");
+            }
+            else if (group == Group.Youth && turns > YouthOldestAge)
+            {
+                reasons.Add($"Turns {turns} this year: past school age, too old for Youth");
+            }
+
+            if (reasons.Count > 0)
+            {
+                suggestions.Add((new ArchiveSuggestion(p.Id, $"{p.Name} {p.Surname}", reasons), p.LastCheckIn ?? p.CreatedAt));
+            }
+        }
+        return [.. suggestions.OrderBy(s => s.Since).Select(s => s.Suggestion)];
+    }
+
+    private static DateOnly ToLocalDate(DateTime utc) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local));
 
     private static DateTime ToUtc(DateOnly localDate) =>
         TimeZoneInfo.ConvertTimeToUtc(localDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), TimeZoneInfo.Local);

@@ -12,11 +12,13 @@ namespace SGY.CheckIn.Services;
 public class YouthService(IDbContextFactory<AppDbContext> dbFactory)
 {
     /// <summary>
-    /// Live search for the check-in box. Matches the start of a name, not anywhere in it:
-    /// "a" finds Anke and Adams, not Chantal. Typing on past the first name ("Chantal B")
+    /// Live search for the check-in box. One letter matches the start of a name only: "a"
+    /// finds Anke and Adams, not Chantal. Typing on past the first name ("Chantal B")
     /// matches the full name, and each word of a surname counts as a start, so "Wyk"
-    /// still finds "van Wyk". Capped at 25 results, which is plenty for a youth group's
-    /// scale and keeps the results list scannable.
+    /// still finds "van Wyk". From two letters on it also matches inside a name, so a
+    /// missed first letter still finds them ("outer" finds Wouter); those come after the
+    /// names that start with what was typed (see <see cref="NameSearch.Rank"/>). Capped at
+    /// 25 results, which is plenty for a youth group's scale and keeps the list scannable.
     /// </summary>
     public async Task<List<Youth>> SearchAsync(string term, Group group, CancellationToken ct = default)
     {
@@ -30,17 +32,23 @@ public class YouthService(IDbContextFactory<AppDbContext> dbFactory)
         var escaped = term.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
         var startsWith = $"{escaped}%";
         var laterWordStartsWith = $"% {escaped}%";
+        var anywhere = term.Length >= 2;
+        var contains = $"%{escaped}%";
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.Youths.AsNoTracking()
+        var matches = await db.Youths.AsNoTracking()
             .Where(y => y.Group == group && !y.IsArchived &&
                 (EF.Functions.Like(y.Name, startsWith, @"\") ||
                  EF.Functions.Like(y.Surname, startsWith, @"\") ||
                  EF.Functions.Like(y.Surname, laterWordStartsWith, @"\") ||
-                 EF.Functions.Like(y.Name + " " + y.Surname, startsWith, @"\")))
-            .OrderBy(y => y.Surname).ThenBy(y => y.Name)
-            .Take(25)
+                 EF.Functions.Like(y.Name + " " + y.Surname, startsWith, @"\") ||
+                 (anywhere && EF.Functions.Like(y.Name + " " + y.Surname, contains, @"\"))))
             .ToListAsync(ct);
+
+        return [.. matches
+            .OrderBy(y => NameSearch.Rank(y.FullName, term))
+            .ThenBy(y => y.Surname).ThenBy(y => y.Name)
+            .Take(25)];
     }
 
     /// <summary>Null if there's no such person in this group.</summary>

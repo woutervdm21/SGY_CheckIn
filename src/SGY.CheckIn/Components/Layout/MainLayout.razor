@@ -40,6 +40,18 @@
             <AuthorizeView Roles="@Roles.Volunteer">
                 <ChildContent><span class="role-badge role-volunteer">Volunteer</span></ChildContent>
             </AuthorizeView>
+            @* This device's label printing (Kids only): set once per device, so it's here
+               rather than on the check-in screen. *@
+            @if (group.PrintsLabels())
+            {
+                <NavLink href="/label-printing" class="header-icon" title="Label printing" aria-label="Label printing">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 9V3.5h10V9M7 17.5H5a2 2 0 0 1-2-2V11a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4.5a2 2 0 0 1-2 2h-2" />
+                        <path d="M7 14h10v6.5H7z" />
+                    </svg>
+                </NavLink>
+            }
+            <ThemeToggle />
             <form method="post" action="/account/logout" class="app-signout">
                 <button type="submit">Sign out</button>
             </form>
@@ -54,6 +66,7 @@
 </div>
 
 <ToastHost />
+<PrintStationListener Group="group" />
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.

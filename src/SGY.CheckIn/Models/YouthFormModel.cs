@@ -16,6 +16,19 @@ public class YouthFormModel : IValidatableObject
     public bool AsksForCell => Group.HasOwnCell();
     public bool AsksForGrade => Group.HasGrades();
     public bool AsksForParent => Group.HasParents();
+    public bool AsksForGender => Group.HasGender();
+
+    /// <summary>
+    /// Set by the register page: only a new child is turned away for being too young for
+    /// Kids' Ministry, so children already on file can still be edited.
+    /// </summary>
+    public bool IsNew { get; set; }
+
+    /// <summary>
+    /// Ticked by the volunteer to register a child too old for Kids' Ministry anyway (an
+    /// exception for today). Not saved: they're flagged again at every check-in.
+    /// </summary>
+    public bool TooOldException { get; set; }
 
     [Required(ErrorMessage = "Name is required")]
     [StringLength(100)]
@@ -35,6 +48,9 @@ public class YouthFormModel : IValidatableObject
 
     [Required(ErrorMessage = "Date of birth is required")]
     public DateOnly? DateOfBirth { get; set; }
+
+    [RequiredInGroup(nameof(AsksForGender), ErrorMessage = "Choose boy or girl")]
+    public Gender? Gender { get; set; }
 
     [RequiredInGroup(nameof(AsksForParent), ErrorMessage = "Parent/guardian's name is required")]
     [StringLength(100)]
@@ -63,6 +79,9 @@ public class YouthFormModel : IValidatableObject
     /// <summary>Care Village flag, independent of <see cref="BehaviourStatus"/>. Anyone signed in can edit it.</summary>
     public bool InCareVillage { get; set; }
 
+    /// <summary>Kids only. Anyone signed in can edit it.</summary>
+    public bool InCmr { get; set; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (DateOfBirth is { } dob)
@@ -80,9 +99,28 @@ public class YouthFormModel : IValidatableObject
                     "That date of birth doesn't look right",
                     [nameof(DateOfBirth)]);
             }
+            else if (IsNew && Group.HasMinistries() && KidsMinistries.For(dob, today) is null)
+            {
+                yield return new ValidationResult(
+                    $"Your child isn't eligible for Kids' Ministry yet. They can join us in {KidsMinistries.JoiningYear(dob)}.",
+                    [nameof(DateOfBirth)]);
+            }
+            else if (IsNew && Group.HasMinistries() && KidsMinistries.IsTooOld(dob, today) && !TooOldException)
+            {
+                yield return new ValidationResult(
+                    "Too old for Kids' Ministry. Tick \"Make an exception today\" to register them anyway.",
+                    [nameof(TooOldException)]);
+            }
         }
 
-        if (Grade is { } grade && !Group.Grades().Contains(grade))
+        if (InCmr && InCareVillage && Group.HasCmr())
+        {
+            yield return new ValidationResult(
+                "A child is either with CMR or in Care Village, not both",
+                [nameof(InCmr)]);
+        }
+
+        if (AsksForGrade && Grade is { } grade && !Group.Grades().Contains(grade))
         {
             yield return new ValidationResult(
                 $"Pick one of the {Group.ToDisplayString()} grades",
@@ -105,7 +143,12 @@ public class YouthFormModel : IValidatableObject
         youth.Name = Name.Trim();
         youth.Surname = Surname.Trim();
         youth.CellNo = group.HasOwnCell() ? Clean(CellNo) : null;
-        youth.Grade = group.HasGrades() ? Grade : null;
+        // A grade saved for a child before Kids went by ministry stays as it was.
+        if (group != Group.Kids)
+        {
+            youth.Grade = group.HasGrades() ? Grade : null;
+        }
+        youth.Gender = group.HasGender() ? Gender : null;
         youth.DateOfBirth = DateOfBirth!.Value;
 
         var hasParents = group.HasParents();
@@ -116,13 +159,11 @@ public class YouthFormModel : IValidatableObject
         youth.Medical = group.HasMedical() ? Clean(Medical) : null;
         youth.Comment = Clean(Comment);
 
-        if (group.HasLeaderFlags())
+        youth.InCareVillage = group.HasCareVillage() && InCareVillage;
+        youth.InCmr = group.HasCmr() && InCmr;
+        if (group.HasLeaderFlags() && includeBehaviourStatus)
         {
-            youth.InCareVillage = InCareVillage;
-            if (includeBehaviourStatus)
-            {
-                youth.BehaviourStatus = BehaviourStatus;
-            }
+            youth.BehaviourStatus = BehaviourStatus;
         }
     }
 
@@ -134,6 +175,7 @@ public class YouthFormModel : IValidatableObject
         CellNo = youth.CellNo,
         Grade = youth.Grade,
         DateOfBirth = youth.DateOfBirth,
+        Gender = youth.Gender,
         ParentName = youth.ParentName,
         ParentSurname = youth.ParentSurname,
         ParentCellNo = youth.ParentCellNo,
@@ -141,6 +183,7 @@ public class YouthFormModel : IValidatableObject
         Comment = youth.Comment,
         BehaviourStatus = youth.BehaviourStatus,
         InCareVillage = youth.InCareVillage,
+        InCmr = youth.InCmr,
     };
 
     private static string? Clean(string? value)

@@ -77,27 +77,56 @@ printed on a label.
 ## Kids name labels
 
 When a child checks in, the app can print a name label to stick on them. It shows the child's
-name, grade, their parent's name and cell number, and any medical notes (allergies, asthma,
-medication) in a black bar. It is made for the **DYMO LabelWriter 450** with **30321 Large
-Address labels** (89 x 36 mm).
+name, age and ministry, their parent's name and cell number, and any medical notes (allergies,
+asthma, medication) in a box. It is made for the **DYMO LabelWriter 450** with **30321 Large
+Address labels** (89 x 36 mm); admins can pick another DYMO size on the **Settings** page.
 
-Only the computer the printer is plugged into can print. Phones and tablets cannot. To set it
-up on that computer:
+The printer is plugged into one computer, the **print station**. Phones and tablets send
+their labels to it, and it prints them as well as its own. To set up the print station:
 
 1. Install the DYMO software from dymo.com so Windows sees the printer, and load the labels.
 2. In Windows printer settings, make the LabelWriter the **default printer**. In its printing
    preferences, choose the 30321 label size.
-3. Open the app in Chrome on that computer, sign in to **Kids**, and tick **This computer
-   prints name labels** under the search box. Each device remembers this for itself.
+3. Open the app in Chrome on that computer, sign in to **Kids**, press the printer button at
+   the top right, and choose **Print on this computer**. Each device remembers this for itself.
 4. Check a child in. Chrome shows its print window: choose the LabelWriter, set margins to
    *None*, and print. Chrome remembers these for next time.
 
-To skip the print window entirely, start Chrome on that computer with `--kiosk-printing`
-added to its shortcut (right-click the shortcut, Properties, add it to the end of *Target*).
-Labels then go straight to the default printer.
+**One click, no print window (needed for phones and tablets).** Chrome has a check-in-desk
+setting, `--kiosk-printing`, that sends every print straight to the default printer. Without
+it, a label sent from a phone opens a print window on the print station that nobody is there
+to click. Give it its own shortcut so everyday Chrome on that computer still asks before
+printing:
 
-**Print label** on a child's details prints another copy at any time, from any computer that
-has the printer.
+1. Make the LabelWriter the **default printer** (turn off *Let Windows manage my default
+   printer* first).
+2. Right-click the desktop, *New*, *Shortcut*, and use this as the location, with the app's
+   address:
+
+   ```
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --user-data-dir="C:\SGCheckInChrome" --kiosk-printing --app=http://<the computer's address>:8080
+   ```
+
+3. Name it *SG Kids Check-In* and always open the app with it at the Kids desk. Sign in to
+   **Kids** and, with the printer button, choose **Print on this computer**.
+
+Checking a child in, or pressing **Print label**, then prints the label straight away. In
+this mode Chrome uses the printer's own paper setting, so make sure it is set to 30321.
+
+**Phones and tablets.** These send their labels to the print station: it's what every new
+device starts on (the printer button at the top right shows **Send to the label printer**). A child checked in on the phone has their label printed on the print
+station, and the phone says it was sent. The print station must have the app open and signed
+in to Kids, on any page, in a window that isn't minimised. If it isn't on, the phone says no
+label was printed, and a leader writes one by hand; labels aren't saved up to print later.
+The printer button's page shows whether a label printer is on.
+
+**Two print stations.** An admin gives each one a name on that computer's printer page, under
+**Printer name** (say *Front door* and *Hall*). With both on, phones get a **Send to** choice
+on their printer page; *Any label printer* uses whichever
+came on last. If the chosen one is off, or doesn't print, the label goes to the other.
+
+**Print label** on a child's details prints another copy at any time, the same way: on this
+computer, or on the print station. Choose **Don't print** on a device that should never print.
 
 ## Dashboard (admins only)
 

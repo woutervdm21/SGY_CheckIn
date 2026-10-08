@@ -214,6 +214,14 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
         }
         columns.Add(new("Date of birth", y => y.DateOfBirth.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
         columns.Add(new("Age", y => AgeToday(y.DateOfBirth).ToString(CultureInfo.InvariantCulture)));
+        if (group.HasMinistries())
+        {
+            columns.Add(new("Ministry", y => KidsMinistries.For(y.DateOfBirth, DateOnly.FromDateTime(DateTime.Today))?.ToDisplayString() ?? ""));
+        }
+        if (group.HasGender())
+        {
+            columns.Add(new("Boy or girl", y => y.Gender?.ToString() ?? ""));
+        }
         if (group.HasParents())
         {
             columns.Add(new("Parent name", y => y.ParentName ?? ""));
@@ -227,6 +235,13 @@ public class ExportService(IDbContextFactory<AppDbContext> dbFactory)
         if (group.HasLeaderFlags())
         {
             columns.Add(new("Status", y => y.BehaviourStatus.ToDisplayString()));
+        }
+        if (group.HasCmr())
+        {
+            columns.Add(new("CMR", y => y.InCmr ? "Yes" : "No"));
+        }
+        if (group.HasCareVillage())
+        {
             columns.Add(new("Care Village", y => y.InCareVillage ? "Yes" : "No"));
         }
         columns.Add(new("Comment", y => y.Comment ?? ""));

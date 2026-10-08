@@ -1,0 +1,138 @@
+@page "/label-printing"
+@attribute [Authorize]
+@implements IDisposable
+@inject LabelPrinting Labels
+@inject PrintStations Stations
+
+<PageTitle>Label printing — SG Check-In</PageTitle>
+
+@* What this device does with Kids name labels (see LabelPrinting). Set once per device, so
+   it lives here, off the check-in screen, behind the printer button in the header. Anyone
+   signed in can change it; only an admin names a print station. *@
+<div class="register-page">
+    <h1>Label printing</h1>
+
+    @if (!group.PrintsLabels())
+    {
+        <p class="page-subtitle">Only Kids prints name labels.</p>
+    }
+    else if (!Labels.Loaded)
+    {
+        <p class="empty-state">Loading…</p>
+    }
+    else
+    {
+        <p class="page-subtitle">Set separately on each phone, tablet and computer.</p>
+
+        <fieldset>
+            <legend>Name labels</legend>
+            @foreach (var (mode, title, hint) in Options)
+            {
+                <label class="label-mode-option">
+                    <input type="radio" name="label-mode" checked="@(Labels.Mode == mode)"
+                           @onchange="() => Labels.SetModeAsync(mode)" />
+                    <span>
+                        <span class="label-mode-title">@title</span>
+                        <span class="label-mode-hint">@hint</span>
+                    </span>
+                </label>
+            }
+        </fieldset>
+
+        @if (Labels.Mode == LabelMode.Here)
+        {
+            <fieldset>
+                <legend>This computer</legend>
+                @if (isAdmin)
+                {
+                    <label class="field">
+                        <span class="field-label">Printer name</span>
+                        <input type="text" value="@Labels.StationName" maxlength="30" @onchange="OnStationNameChanged" />
+                        <p class="field-hint">Only needed if there are two label printers. Name them, e.g. "Front door" and "Hall", so phones can choose one.</p>
+                    </label>
+                }
+                else
+                {
+                    <p class="label-device-status">Phones see this printer as <strong>@Labels.StationName</strong>. Only an admin can rename it.</p>
+                }
+                <p class="label-device-status">Keep the app open on this computer, and don't minimise it: labels from phones only print while it's open. Open it with the <strong>SG Kids Check-In</strong> shortcut, so labels print without a print window popping up.</p>
+            </fieldset>
+        }
+        else if (Labels.Mode == LabelMode.Station)
+        {
+            var online = Stations.Online(group);
+            <fieldset>
+                <legend>Label printer</legend>
+                @if (online.Count == 0)
+                {
+                    <p class="label-device-status off">The label printer isn't on. Open the app on the computer with the DYMO, then labels will print there.</p>
+                }
+                else if (online.Count == 1)
+                {
+                    <p class="label-device-status on">Labels print on <strong>@online[0]</strong>.</p>
+                }
+                else
+                {
+                    <label class="field">
+                        <span class="field-label">Send to</span>
+                        <select value="@Labels.Target" @onchange="OnTargetChanged">
+                            <option value="">Any label printer</option>
+                            @foreach (var name in online)
+                            {
+                                <option value="@name">@name</option>
+                            }
+                        </select>
+                        <p class="field-hint">If that one is off, labels go to the other one.</p>
+                    </label>
+                }
+            </fieldset>
+        }
+
+        <a href="/" class="cancel-link">Back to Check In</a>
+    }
+</div>
+
+@code {
+    private static readonly (LabelMode Mode, string Title, string Hint)[] Options =
+    [
+        (LabelMode.Station, "Send to the label printer", "For phones and tablets. Labels print on the computer with the DYMO."),
+        (LabelMode.Here, "Print on this computer", "For the computer with the DYMO plugged in. Labels sent from phones and tablets print here too."),
+        (LabelMode.Off, "Don't print", "Children checked in on this device get no label."),
+    ];
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Group group = Group.Youth;
+    private bool isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Labels.Changed += OnChanged;
+        Stations.Changed += OnChanged;
+        group = await AuthState.GetGroupAsync();
+        isAdmin = AuthState is not null && (await AuthState).User.IsInRole(Roles.Admin);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && group.PrintsLabels())
+        {
+            await Labels.LoadAsync();
+        }
+    }
+
+    private Task OnStationNameChanged(ChangeEventArgs e) =>
+        isAdmin ? Labels.SetStationNameAsync(e.Value?.ToString() ?? "") : Task.CompletedTask;
+
+    private Task OnTargetChanged(ChangeEventArgs e) => Labels.SetTargetAsync(e.Value?.ToString() ?? "");
+
+    // This device's setting read or changed, or a print station coming on or going off.
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Labels.Changed -= OnChanged;
+        Stations.Changed -= OnChanged;
+    }
+}

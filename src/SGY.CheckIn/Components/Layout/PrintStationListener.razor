@@ -1,0 +1,91 @@
+@* Makes this browser a print station while it's set to print labels here: phones and
+   tablets set to send their labels then have them printed on this computer's DYMO. In the
+   main layout, so it keeps listening on every page. Renders nothing. *@
+@implements IDisposable
+@inject LabelPrinting Labels
+@inject PrintStations Stations
+@inject ToastService Toasts
+
+@code {
+    [Parameter, EditorRequired]
+    public Group Group { get; set; }
+
+    private IDisposable? registration;
+    private (Group Group, string Name)? registered;
+    private bool rendered;
+
+    protected override void OnInitialized() => Labels.Changed += OnLabelsChanged;
+
+    // The layout only knows its group once sign-in has been read, which can be after the
+    // first render, so this follows the parameter rather than looking once.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (rendered)
+        {
+            await RefreshAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            rendered = true;
+            await RefreshAsync();
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (Group.PrintsLabels())
+        {
+            // The browser's setting can only be read once there's a page (after a render).
+            await Labels.LoadAsync();
+        }
+        Update();
+    }
+
+    private void OnLabelsChanged() => _ = InvokeAsync(Update);
+
+    // On while this device prints here and is connected; signed up again under a new name.
+    private void Update()
+    {
+        var on = rendered && Group.PrintsLabels() && Labels.Loaded && Labels.Mode == LabelMode.Here && Labels.Connected;
+        if (on && registration is not null && registered == (Group, Labels.StationName))
+        {
+            return;
+        }
+
+        registration?.Dispose();
+        registration = null;
+        registered = null;
+        if (on)
+        {
+            registered = (Group, Labels.StationName);
+            registration = Stations.Register(Group, Labels.StationName, PrintSentLabelAsync);
+        }
+    }
+
+    // A label from another device. Called from that device's circuit, so the printing is
+    // handed over to this one's.
+    private async Task<bool> PrintSentLabelAsync(LabelJob job, CancellationToken ct)
+    {
+        var group = registered?.Group ?? Group;
+        var printed = false;
+        await InvokeAsync(async () =>
+        {
+            printed = await Labels.PrintHereAsync(job.YouthId, group, ct);
+            if (printed)
+            {
+                Toasts.ShowSuccess($"Printing {job.ChildName}'s label (sent from another device)");
+            }
+        });
+        return printed;
+    }
+
+    public void Dispose()
+    {
+        Labels.Changed -= OnLabelsChanged;
+        registration?.Dispose();
+    }
+}

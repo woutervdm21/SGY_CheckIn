@@ -28,8 +28,15 @@ public class Youth
     [MaxLength(20)]
     public string? CellNo { get; set; }
 
-    /// <summary>Null for young adults, who have left school.</summary>
+    /// <summary>
+    /// Youth only. Kids go by their ministry, worked out from their date of birth (see
+    /// <see cref="KidsMinistries"/>); a grade saved for a child before that is kept but not
+    /// shown. Null for young adults, who have left school.
+    /// </summary>
     public Grade? Grade { get; set; }
+
+    /// <summary>Kids only. Null for a child registered before it was asked.</summary>
+    public Gender? Gender { get; set; }
 
     [Required]
     public DateOnly DateOfBirth { get; set; }
@@ -66,12 +73,19 @@ public class Youth
     public BehaviourStatus BehaviourStatus { get; set; } = BehaviourStatus.Green;
 
     /// <summary>
-    /// Whether this youth is part of Care Village. Independent of
+    /// Whether this person is part of Care Village. Independent of
     /// <see cref="BehaviourStatus"/> — a youth can be flagged red and in Care Village at
-    /// the same time — so it's its own flag rather than another status value. Youth only.
-    /// Anyone signed in can edit it.
+    /// the same time — so it's its own flag rather than another status value. Kids and
+    /// Youth. Anyone signed in can edit it.
     /// </summary>
     public bool InCareVillage { get; set; }
+
+    /// <summary>
+    /// Whether this child is with CMR. Kids only, and never together with
+    /// <see cref="InCareVillage"/>. Like Care Village it shows on the child's label only as
+    /// dots, which volunteers know to look for, so the label doesn't spell it out.
+    /// </summary>
+    public bool InCmr { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

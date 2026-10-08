@@ -37,7 +37,7 @@
                     <div class="profile-info">
                         <span class="profile-name">@y.FullName</span>
                         <span class="profile-sub">
-                            @string.Join(" · ", new[] { y.Grade.ToDisplayString(), y.CellNo ?? y.ParentCellNo }.Where(part => !string.IsNullOrEmpty(part)))
+                            @string.Join(" · ", new[] { group.Describe(y, DateOnly.FromDateTime(DateTime.Today)), y.CellNo ?? y.ParentCellNo }.Where(part => !string.IsNullOrEmpty(part)))
                             @if (y.IsArchived)
                             {
                                 <span class="archived-tag">Archived</span>

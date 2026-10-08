@@ -40,6 +40,9 @@ builder.Services.AddScoped<CheckInService>();
 builder.Services.AddScoped<ReportingService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<LabelService>();
+builder.Services.AddSingleton<PrintStations>();
+builder.Services.AddScoped<LabelPrinting>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, LabelPrintingCircuitHandler>();
 builder.Services.AddSingleton(sp => new BackupService(
     connectionString, sp.GetRequiredService<IConfiguration>(), sp.GetRequiredService<ILogger<BackupService>>()));
 builder.Services.AddHostedService<AutomaticBackupService>();

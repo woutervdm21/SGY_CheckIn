@@ -2,6 +2,9 @@
 @attribute [Authorize(Roles = Roles.Admin)]
 @inject ReportingService Reporting
 @inject CheckInService CheckInService
+@inject YouthService YouthService
+@inject ToastService Toasts
+@inject ILogger<Dashboard> Logger
 
 <PageTitle>Dashboard — SG Check-In</PageTitle>
 
@@ -118,7 +121,10 @@
                             <li>
                                 <a class="person-row" href="@($"/admin/youth/{youth.YouthId}/edit")">
                                     <span class="person-name">@youth.FullName</span>
-                                    <span class="person-grade">@youth.Grade.ToDisplayString()</span>
+                                    @if (group.HasGrades())
+                                    {
+                                        <span class="person-grade">@youth.Grade.ToDisplayString()</span>
+                                    }
                                     <span class="person-metric">@youth.Evenings of @report.SessionCount</span>
                                 </a>
                             </li>
@@ -140,7 +146,10 @@
                                 <li>
                                     <a class="person-row" href="@($"/admin/youth/{youth.YouthId}/edit")">
                                         <span class="person-name">@youth.FullName</span>
-                                        <span class="person-grade">@youth.Grade.ToDisplayString()</span>
+                                        @if (group.HasGrades())
+                                        {
+                                            <span class="person-grade">@youth.Grade.ToDisplayString()</span>
+                                        }
                                         <span class="person-metric @(youth.LastSeen is null ? "never" : "")">
                                             @(youth.LastSeen is { } seen ? $"Last seen {seen:d MMM yyyy}" : "Never checked in")
                                         </span>
@@ -189,6 +198,59 @@
             </section>
         }
     }
+
+    @* Not tied to the period above either: the coming week. *@
+    @if (birthdays.Count > 0)
+    {
+        <section class="chart-card upcoming-birthdays">
+            <h2>Birthdays this week</h2>
+            <ul class="person-list">
+                @foreach (var birthday in birthdays)
+                {
+                    <li>
+                        <a class="person-row" href="@($"/admin/youth/{birthday.YouthId}/edit")">
+                            <span class="person-name"><BirthdayCake /> @birthday.FullName</span>
+                            <span class="person-metric">
+                                @(birthday.Birthday == DateOnly.FromDateTime(DateTime.Today) ? "Today" : birthday.Birthday.ToString("ddd d MMM")) · turns @birthday.Turns
+                            </span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    @* Not tied to the period above: who has probably left, and why, so the admin can tidy
+       up the search list. Archiving keeps their history and can be undone from their
+       profile. *@
+    @if (archiveSuggestions.Count > 0)
+    {
+        <section class="chart-card archive-suggestions">
+            <h2>Consider archiving</h2>
+            <ul class="person-list">
+                @foreach (var person in archiveSuggestions)
+                {
+                    <li class="archive-suggestion">
+                        <a class="person-row" href="@($"/admin/youth/{person.YouthId}/edit")">
+                            <span class="person-name">@person.FullName</span>
+                            <span class="person-metric">@string.Join(" · ", person.Reasons)</span>
+                        </a>
+                        @if (confirmingArchiveId == person.YouthId)
+                        {
+                            <span class="archive-suggestion-actions">
+                                <button type="button" class="archive-confirm-button" @onclick="() => Archive(person)">Yes, archive</button>
+                                <button type="button" class="cancel-link" @onclick="() => confirmingArchiveId = null">Cancel</button>
+                            </span>
+                        }
+                        else
+                        {
+                            <button type="button" class="archive-suggestion-button" @onclick="() => confirmingArchiveId = person.YouthId">Archive</button>
+                        }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
 </div>
 
 @code {
@@ -211,9 +273,36 @@
         group = await AuthState.GetGroupAsync();
         todayCount = await CheckInService.GetTodayCountAsync(group);
         await Load();
+        await LoadArchiveSuggestions();
+        birthdays = await Reporting.GetUpcomingBirthdaysAsync(group);
     }
 
     private async Task Load() => report = await Reporting.GetAttendanceAsync(from, to, group);
+
+    private IReadOnlyList<ArchiveSuggestion> archiveSuggestions = [];
+    private IReadOnlyList<UpcomingBirthday> birthdays = [];
+    private int? confirmingArchiveId;
+
+    private async Task LoadArchiveSuggestions() =>
+        archiveSuggestions = await Reporting.GetArchiveSuggestionsAsync(group);
+
+    private async Task Archive(ArchiveSuggestion person)
+    {
+        try
+        {
+            await YouthService.ArchiveAsync(person.YouthId, group);
+            Toasts.ShowSuccess($"{person.FullName} archived. Their profile can bring them back.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Archiving {YouthId} from the dashboard failed", person.YouthId);
+            Toasts.ShowError($"Couldn't archive {person.FullName}. Please try again.");
+            return;
+        }
+        confirmingArchiveId = null;
+        await LoadArchiveSuggestions();
+        await Load();
+    }
 
     private async Task OnFromChanged(DateOnly? value)
     {

@@ -62,8 +62,23 @@ public static class GroupExtensions
     /// <summary>What one meeting of the group is called on the dashboard.</summary>
     public static string SessionNoun(this Group group) => group == Group.Youth ? "evening" : "session";
 
-    /// <summary>Kids and Youth are in school; young adults have left.</summary>
-    public static bool HasGrades(this Group group) => group != Group.YoungAdults;
+    /// <summary>
+    /// Youth are known by their grade. Kids go by their ministry instead (from their date of
+    /// birth, see <see cref="KidsMinistries"/>), and young adults have left school.
+    /// </summary>
+    public static bool HasGrades(this Group group) => group == Group.Youth;
+
+    /// <summary>Kids are split into ministries by the year they were born.</summary>
+    public static bool HasMinistries(this Group group) => group == Group.Kids;
+
+    /// <summary>Kids record whether they're a boy or a girl.</summary>
+    public static bool HasGender(this Group group) => group == Group.Kids;
+
+    /// <summary>Kids and Youth can be in Care Village.</summary>
+    public static bool HasCareVillage(this Group group) => group != Group.YoungAdults;
+
+    /// <summary>Kids can be with CMR.</summary>
+    public static bool HasCmr(this Group group) => group == Group.Kids;
 
     /// <summary>Kids and Youth have a parent/guardian on file; young adults are their own contact.</summary>
     public static bool HasParents(this Group group) => group != Group.YoungAdults;
@@ -83,16 +98,31 @@ public static class GroupExtensions
         : "Anything leaders should know — allergies, pastoral notes.";
 
     /// <summary>
-    /// The behaviour status and Care Village flag are Youth only. Every group keeps the
-    /// free-text leaders' comment.
+    /// The behaviour status is Youth only. Every group keeps the free-text leaders' comment.
     /// </summary>
     public static bool HasLeaderFlags(this Group group) => group == Group.Youth;
 
-    /// <summary>The grades a member of this group can be in, youngest first. Empty for young adults.</summary>
+    /// <summary>The grades a member of this group can be in, youngest first. Empty for Kids and young adults.</summary>
     public static IReadOnlyList<Grade> Grades(this Group group) => group switch
     {
-        Group.Kids => [Grade.GradeRRR, Grade.GradeRR, Grade.GradeR, Grade.Grade1, Grade.Grade2, Grade.Grade3, Grade.Grade4, Grade.Grade5, Grade.Grade6, Grade.Grade7],
         Group.Youth => [Grade.Grade8, Grade.Grade9, Grade.Grade10, Grade.Grade11, Grade.Grade12],
         _ => [],
     };
+
+    /// <summary>
+    /// What a person is known by besides their name, in lists and on the check-in screen:
+    /// "Grade 9" for Youth, "Bravehearts · 9" for Kids (or just the age, for a child too
+    /// young for a ministry). Null for young adults.
+    /// </summary>
+    public static string? Describe(this Group group, Youth person, DateOnly today)
+    {
+        if (group.HasMinistries())
+        {
+            var age = Birthdays.AgeOn(person.DateOfBirth, today);
+            return KidsMinistries.For(person.DateOfBirth, today) is { } ministry
+                ? $"{ministry.ToDisplayString()} · {age}"
+                : $"Age {age}";
+        }
+        return group.HasGrades() ? person.Grade?.ToDisplayString() : null;
+    }
 }

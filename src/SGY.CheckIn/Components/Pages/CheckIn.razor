@@ -3,7 +3,8 @@
 @inject YouthService YouthService
 @inject CheckInService CheckInService
 @inject ToastService Toasts
-@inject IJSRuntime JS
+@inject LabelPrinting Labels
+@implements IDisposable
 @inject ILogger<CheckIn> Logger
 
 <PageTitle>Check In — SG Check-In</PageTitle>
@@ -45,8 +46,12 @@
                             {
                                 <span class="result-flag care" role="img" aria-label="Care Village"></span>
                             }
-                            <span class="result-name">@y.FullName</span>
-                            <span class="result-grade">@y.Grade.ToDisplayString()</span>
+                            <span class="result-name">@Highlighted(y.FullName)</span>
+                            @if (group.HasMinistries() && Birthdays.NearbyBirthday(y.DateOfBirth, Today) is not null)
+                            {
+                                <span class="result-birthday" title="Birthday this week"><BirthdayCake /></span>
+                            }
+                            <span class="result-grade">@group.Describe(y, Today)</span>
                             @if (checkedInTodayIds.Contains(y.Id))
                             {
                                 <span class="badge-checked-in">Checked in</span>
@@ -58,16 +63,6 @@
         }
 
         <a href="/register" class="register-link">+ Register a new @group.PersonNoun()</a>
-
-        @* Per device: only the computer with the DYMO plugged in turns this on, so checking
-           in from a phone never pops up a print dialog. *@
-        @if (group.PrintsLabels())
-        {
-            <label class="checkbox-field label-printer-toggle">
-                <input type="checkbox" checked="@isLabelPrinter" @onchange="OnLabelPrinterChanged" />
-                <span>This computer prints name labels</span>
-            </label>
-        }
     </div>
 
     @if (selected is not null)
@@ -76,9 +71,19 @@
             <div class="detail-header">
                 <div>
                     <h2>@selected.FullName</h2>
-                    @if (selected.Grade is not null)
+                    @if (group.Describe(selected, Today) is { } description)
                     {
-                        <p class="detail-grade">@selected.Grade.ToDisplayString()</p>
+                        <p class="detail-grade">@description</p>
+                    }
+                    @if (IsTooOld(selected))
+                    {
+                        <p class="age-flag-pill">Turns @KidsMinistries.AgeThisYear(selected.DateOfBirth, Today) this year: too old for Kids</p>
+                    }
+                    @* A week either side, so the leaders can make a fuss of them. (The label
+                       gets a cake too.) *@
+                    @if (group.HasMinistries() && Birthdays.NearbyBirthday(selected.DateOfBirth, Today) is { } birthday)
+                    {
+                        <p class="birthday-banner"><BirthdayCake /> @BirthdayText(birthday, selected.DateOfBirth)</p>
                     }
                 </div>
                 <a href="@($"/admin/youth/{selected.Id}/edit?from=checkin")" class="detail-edit">Edit details</a>
@@ -97,7 +102,7 @@
                 }
                 <div>
                     <dt>Date of birth</dt>
-                    <dd>@selected.DateOfBirth.ToString("dd/MM/yyyy") <span class="detail-age">(age @AgeToday(selected.DateOfBirth))</span></dd>
+                    <dd>@selected.DateOfBirth.ToString("dd/MM/yyyy") <span class="detail-age">(age @Birthdays.AgeOn(selected.DateOfBirth, Today))</span></dd>
                 </div>
                 @if (group.HasParents())
                 {
@@ -124,9 +129,10 @@
             @if (todayCheckIn is not null)
             {
                 @* No second "Check In": that would only add a duplicate row to the log. Undo
-                   is for a youth checked in by mistake, so it asks first. *@
-                <div class="already-checked-in" role="status">
-                    <span class="already-checked-in-title">Already checked in</span>
+                   is for a youth checked in by mistake, so it asks first. Straight after
+                   checking someone in, this is the confirmation that it worked. *@
+                <div class="already-checked-in @(justCheckedIn ? "just-now" : "")" role="status">
+                    <span class="already-checked-in-title">@(justCheckedIn ? "Checked in" : "Already checked in")</span>
                     <span class="already-checked-in-time">at @FormatLocalTime(todayCheckIn.Timestamp)</span>
                 </div>
 
@@ -147,14 +153,22 @@
                     </div>
                 }
             }
+            else if (IsTooOld(selected) && !exceptionToday)
+            {
+                @* Past Kids' Ministry: checking them in takes a deliberate second step. *@
+                <div class="age-flag" role="alert">
+                    <p>@selected.Name is past Kids' Ministry, which ends with Refuel at 13.</p>
+                    <button type="button" class="age-flag-button" @onclick="() => exceptionToday = true">Make an exception today</button>
+                </div>
+            }
             else
             {
                 <button type="button" class="checkin-button" @onclick="DoCheckIn">Check In</button>
             }
 
-            @if (group.PrintsLabels())
+            @if (group.PrintsLabels() && Labels.Mode != LabelMode.Off)
             {
-                <button type="button" class="print-label-button" @onclick="() => PrintLabelAsync(selected!)">
+                <button type="button" class="print-label-button" @onclick="() => Labels.PrintAsync(selected!, group)">
                     Print label
                 </button>
             }
@@ -170,6 +184,12 @@
 @code {
     private ElementReference searchInputRef;
     private string searchTerm = "";
+
+    // The part of the name matching what's in the box, marked as it's typed. Follows the box
+    // rather than the last search, so it keeps up between searches.
+    private RenderFragment Highlighted(string name) => NameSearch.Find(name, searchTerm) is { } match
+        ? @<text>@name[..match.Start]<mark>@name.Substring(match.Start, match.Length)</mark>@name[(match.Start + match.Length)..]</text>
+        : @<text>@name</text>;
     private List<Youth> results = [];
     private HashSet<int> checkedInTodayIds = [];
     private bool isSearching;
@@ -178,6 +198,10 @@
     private Youth? selected;
     private CheckInRecord? todayCheckIn;
     private bool confirmingUndo;
+    // True while the person on screen is the one just checked in from this screen.
+    private bool justCheckedIn;
+    // Set when a volunteer lets a child too old for Kids in anyway; only for the one on screen.
+    private bool exceptionToday;
 
     // Set when coming back from "Edit details", so the same youth is still selected.
     [SupplyParameterFromQuery(Name = "youth")]
@@ -190,11 +214,10 @@
 
     private Group group = Group.Youth;
 
-    // Read from this device's browser after the first render (it isn't known on the server).
-    private bool isLabelPrinter;
-
     protected override async Task OnInitializedAsync()
     {
+        Labels.Changed += OnPrintingChanged;
+
         group = await AuthState.GetGroupAsync();
         todayCount = await CheckInService.GetTodayCountAsync(group);
 
@@ -208,16 +231,8 @@
     {
         if (firstRender && group.PrintsLabels())
         {
-            try
-            {
-                isLabelPrinter = await JS.InvokeAsync<bool>("sgLabels.isPrinter");
-                StateHasChanged();
-            }
-            catch (JSException ex)
-            {
-                // Check-in still works; this device just won't print until the page reloads.
-                Logger.LogWarning(ex, "Couldn't read the label printer setting");
-            }
+            // This device's label setting lives in its browser, so only now can it be read.
+            await Labels.LoadAsync();
         }
 
         if (needsFocus)
@@ -235,6 +250,8 @@
         selected = null;
         todayCheckIn = null;
         confirmingUndo = false;
+        justCheckedIn = false;
+        exceptionToday = false;
 
         debounceCts?.Cancel();
         var cts = new CancellationTokenSource();
@@ -282,6 +299,8 @@
 
         selected = youth;
         confirmingUndo = false;
+        justCheckedIn = false;
+        exceptionToday = false;
         todayCheckIn = await CheckInService.GetTodayCheckInAsync(youth.Id, group);
     }
 
@@ -292,9 +311,10 @@
             return;
         }
 
+        CheckInRecord record;
         try
         {
-            await CheckInService.CheckInAsync(selected.Id, group);
+            record = await CheckInService.CheckInAsync(selected.Id, group);
         }
         catch (Exception ex)
         {
@@ -307,19 +327,21 @@
         Toasts.ShowSuccess($"{child.FullName} checked in at {FormatLocalTime(DateTime.UtcNow)}");
         todayCount = await CheckInService.GetTodayCountAsync(group);
 
+        // Their details stay up as "Checked in" so the volunteer sees it worked; the search
+        // box empties and takes the cursor for the next person, and typing replaces them.
         searchTerm = "";
         results = [];
         checkedInTodayIds = [];
-        selected = null;
-        todayCheckIn = null;
+        todayCheckIn = record;
+        justCheckedIn = true;
         needsFocus = true;
 
-        // After the screen has cleared for the next child: the print dialog (if Chrome
-        // shows one) holds up the page until it's dealt with.
-        if (group.PrintsLabels() && isLabelPrinter)
+        // After the screen has updated: the print dialog (if Chrome shows one) holds up
+        // the page until it's dealt with, and a label sent to the print station takes a moment.
+        if (group.PrintsLabels() && Labels.Mode != LabelMode.Off)
         {
             StateHasChanged();
-            await PrintLabelAsync(child);
+            await Labels.PrintAsync(child, group);
         }
     }
 
@@ -344,41 +366,34 @@
 
         confirmingUndo = false;
         todayCheckIn = null;
+        justCheckedIn = false;
         checkedInTodayIds.Remove(youth.Id);
         todayCount = await CheckInService.GetTodayCountAsync(group);
         Toasts.ShowSuccess($"{youth.FullName}'s check-in undone");
     }
 
-    private async Task OnLabelPrinterChanged(ChangeEventArgs e)
-    {
-        isLabelPrinter = e.Value is true;
-        await JS.InvokeVoidAsync("sgLabels.setPrinter", isLabelPrinter);
-    }
+    // This device's label setting read (it decides whether Print label shows).
+    private void OnPrintingChanged() => _ = InvokeAsync(StateHasChanged);
 
-    private async Task PrintLabelAsync(Youth child)
-    {
-        bool printed;
-        try
-        {
-            printed = await JS.InvokeAsync<bool>("sgLabels.print", $"/labels/{child.Id}?group={group.ToKey()}");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Printing the label for {YouthId} failed", child.Id);
-            printed = false;
-        }
+    public void Dispose() => Labels.Changed -= OnPrintingChanged;
 
-        if (!printed)
-        {
-            Toasts.ShowError($"Couldn't print {child.Name}'s label. Check the printer and press Print label.");
-        }
-    }
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
 
-    private static int AgeToday(DateOnly dateOfBirth)
+    private bool IsTooOld(Youth person) =>
+        group.HasMinistries() && KidsMinistries.IsTooOld(person.DateOfBirth, Today);
+
+    private static string BirthdayText(DateOnly birthday, DateOnly dateOfBirth)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var age = today.Year - dateOfBirth.Year;
-        return dateOfBirth > today.AddYears(-age) ? age - 1 : age;
+        var age = birthday.Year - dateOfBirth.Year;
+        var days = birthday.DayNumber - Today.DayNumber;
+        return days switch
+        {
+            0 => $"Birthday today! Turns {age}",
+            1 => $"Birthday tomorrow: turns {age}",
+            -1 => $"Turned {age} yesterday",
+            > 0 => $"Birthday on {birthday:dddd}: turns {age}",
+            _ => $"Turned {age} on {birthday:dddd}",
+        };
     }
 
     private static string FormatLocalTime(DateTime utc) =>

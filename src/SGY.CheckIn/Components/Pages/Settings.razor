@@ -3,6 +3,7 @@
 @using System.ComponentModel.DataAnnotations
 @inject VolunteerPasswordStore VolunteerPasswords
 @inject BackupService Backups
+@inject LabelService Labels
 @inject ToastService Toasts
 @inject ILogger<Settings> Logger
 
@@ -62,6 +63,43 @@
             <button type="submit" class="submit-button" disabled="@isSubmitting">Set @passwordGroup.ToDisplayString() password</button>
         </div>
     </EditForm>
+
+    @* One style for every label printer, so all the children's labels match. *@
+    <fieldset>
+        <legend>Kids name labels</legend>
+
+        <div class="field">
+            <span class="field-label">Style</span>
+            <div class="report-presets">
+                <button type="button" class="preset @(lightLabels ? "" : "active")" aria-pressed="@(!lightLabels)"
+                        disabled="@isSavingLabelStyle" @onclick="() => SetLabelStyle(false)">Dark</button>
+                <button type="button" class="preset @(lightLabels ? "active" : "")" aria-pressed="@lightLabels"
+                        disabled="@isSavingLabelStyle" @onclick="() => SetLabelStyle(true)">Light</button>
+            </div>
+            <p class="field-hint">
+                Dark has a solid black band down the left; light has a white band behind a black line,
+                for less black on each label. Applies to every computer that prints labels, from the next label.
+            </p>
+        </div>
+
+        <div class="field">
+            <span class="field-label">Label size</span>
+            <div class="report-presets">
+                @foreach (var size in LabelSize.All)
+                {
+                    <button type="button" class="preset @(labelSize == size ? "active" : "")" aria-pressed="@(labelSize == size)"
+                            disabled="@isSavingLabelStyle" @onclick="() => SetLabelSize(size)">
+                        @size.Name <span class="preset-detail">@size.Dimensions</span>
+                    </button>
+                }
+            </div>
+            <p class="field-hint">
+                The DYMO label loaded in the printers (@labelSize.Name is DYMO @labelSize.Codes).
+                The label prints across the roll. Set the same paper size for the LabelWriter in the
+                printer's settings, or labels come out cut off or shrunk.
+            </p>
+        </div>
+    </fieldset>
 
     @* Backups are full copies of everything, made automatically once a week. The list
        is the way to get one off this computer: download it to a USB stick or the church
@@ -127,12 +165,67 @@
     private bool isSubmitting;
     private IReadOnlyList<BackupFile> backups = [];
     private bool isBackingUp;
+    private bool lightLabels;
+    private LabelSize labelSize = LabelSize.LargeAddress;
+    private bool isSavingLabelStyle;
 
     protected override async Task OnInitializedAsync()
     {
         // Start on the group the admin is working in; the buttons reach the others.
         passwordGroup = await AuthState.GetGroupAsync();
         backups = Backups.List();
+        lightLabels = await Labels.IsLightAsync();
+        labelSize = await Labels.GetSizeAsync();
+    }
+
+    private async Task SetLabelSize(LabelSize size)
+    {
+        if (size == labelSize)
+        {
+            return;
+        }
+
+        isSavingLabelStyle = true;
+        try
+        {
+            await Labels.SetSizeAsync(size);
+            labelSize = size;
+            Toasts.ShowSuccess($"Kids labels now print on {size.Name} labels ({size.Dimensions}).");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Changing the label size failed");
+            Toasts.ShowError("Couldn't change the label size. Please try again.");
+        }
+        finally
+        {
+            isSavingLabelStyle = false;
+        }
+    }
+
+    private async Task SetLabelStyle(bool light)
+    {
+        if (light == lightLabels)
+        {
+            return;
+        }
+
+        isSavingLabelStyle = true;
+        try
+        {
+            await Labels.SetLightAsync(light);
+            lightLabels = light;
+            Toasts.ShowSuccess($"Kids labels now print in the {(light ? "light" : "dark")} style.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Changing the label style failed");
+            Toasts.ShowError("Couldn't change the label style. Please try again.");
+        }
+        finally
+        {
+            isSavingLabelStyle = false;
+        }
     }
 
     private async Task HandleValidSubmit()

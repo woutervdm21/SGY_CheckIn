@@ -1,0 +1,120 @@
+@* Runs a form model's own checks (its IValidatableObject.Validate, e.g. "isn't eligible
+   for Kids' Ministry yet") as soon as a field changes, not only on submit. Put it inside
+   an EditForm after <DataAnnotationsValidator />, which on its own only runs those checks
+   on submit.
+
+   A check shows straight away on the field just changed, and on submit even while other
+   fields are still empty. One on another field only shows once submit has flagged it,
+   and clears as soon as it's fixed: ticking "Make an exception today" clears the too-old
+   message without the date being touched. Renders nothing. *@
+@using System.ComponentModel.DataAnnotations
+@implements IDisposable
+
+@code {
+    [CascadingParameter]
+    private EditContext? EditContext { get; set; }
+
+    private EditContext? context;
+    private ValidationMessageStore? store;
+    // Fields with a check showing (from here or from submit).
+    private HashSet<FieldIdentifier> showing = [];
+    private bool updating;
+
+    protected override void OnParametersSet()
+    {
+        // EditForm makes a new EditContext whenever its model is swapped (EditYouth does
+        // once the youth loads), so follow it.
+        if (EditContext != context)
+        {
+            Unsubscribe();
+            context = EditContext ?? throw new InvalidOperationException($"{nameof(LiveValidation)} goes inside an EditForm.");
+            store = new ValidationMessageStore(context);
+            showing = [];
+            context.OnFieldChanged += OnFieldChanged;
+            context.OnValidationRequested += OnValidationRequested;
+        }
+    }
+
+    private void OnFieldChanged(object? sender, FieldChangedEventArgs e)
+    {
+        if (updating || context is null || store is null)
+        {
+            return;
+        }
+
+        updating = true;
+        try
+        {
+            var results = Check();
+            var show = results.Where(r => r.Key.Equals(e.FieldIdentifier) || showing.Contains(r.Key)).ToList();
+
+            // Submit's copies of these live in DataAnnotationsValidator's own messages:
+            // telling it the field changed clears them, so they're only shown from here.
+            foreach (var field in showing.Union(show.Select(r => r.Key)).Where(f => !f.Equals(e.FieldIdentifier)).ToList())
+            {
+                context.NotifyFieldChanged(field);
+            }
+
+            store.Clear();
+            foreach (var (field, messages) in show)
+            {
+                store.Add(field, messages);
+            }
+            showing = [.. show.Select(r => r.Key)];
+            context.NotifyValidationStateChanged();
+        }
+        finally
+        {
+            updating = false;
+        }
+    }
+
+    // Submit: DataAnnotationsValidator (which runs first) only runs these checks once every
+    // required field is filled in, so add the ones it skipped, to show everything at once.
+    private void OnValidationRequested(object? sender, ValidationRequestedEventArgs e)
+    {
+        if (context is null || store is null)
+        {
+            return;
+        }
+
+        store.Clear();
+        var results = Check();
+        foreach (var (field, messages) in results)
+        {
+            if (!context.GetValidationMessages(field).Any())
+            {
+                store.Add(field, messages);
+            }
+        }
+        showing = [.. results.Keys];
+    }
+
+    // The model's own checks, by field.
+    private Dictionary<FieldIdentifier, List<string>> Check()
+    {
+        var model = context!.Model;
+        if (model is not IValidatableObject validatable)
+        {
+            return [];
+        }
+
+        return validatable.Validate(new ValidationContext(model))
+            .Where(r => r.ErrorMessage is not null)
+            .SelectMany(r => r.MemberNames.Select(name => (Field: new FieldIdentifier(model, name), Message: r.ErrorMessage!)))
+            .GroupBy(x => x.Field, x => x.Message)
+            .ToDictionary(g => g.Key, g => g.ToList());
+    }
+
+    private void Unsubscribe()
+    {
+        if (context is not null)
+        {
+            context.OnFieldChanged -= OnFieldChanged;
+            context.OnValidationRequested -= OnValidationRequested;
+            store?.Clear();
+        }
+    }
+
+    public void Dispose() => Unsubscribe();
+}

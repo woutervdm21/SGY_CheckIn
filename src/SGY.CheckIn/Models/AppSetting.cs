@@ -4,8 +4,9 @@ namespace SGY.CheckIn.Models;
 
 /// <summary>
 /// A key/value setting an admin can change from inside the app, so it doesn't need a
-/// config edit and container restart — currently just the volunteer password (see
-/// <see cref="Auth.VolunteerPasswordStore"/>).
+/// config edit and container restart: the volunteer passwords (see
+/// <see cref="Auth.VolunteerPasswordStore"/>) and the Kids label style (see
+/// <see cref="Services.LabelService"/>).
 /// </summary>
 public class AppSetting
 {

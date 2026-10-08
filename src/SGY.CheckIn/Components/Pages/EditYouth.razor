@@ -22,18 +22,19 @@
 
         <EditForm Model="form" OnValidSubmit="HandleValidSubmit" OnInvalidSubmit="ShowFixFieldsError" FormName="edit-youth">
             <DataAnnotationsValidator />
+            <LiveValidation />
 
             <fieldset>
                 <legend>@group.PersonNoun().Capitalised() details</legend>
 
                 <label class="field">
-                    <span class="field-label">Name</span>
+                    <span class="field-label">Name <span class="required" aria-hidden="true">*</span></span>
                     <InputText @bind-Value="form.Name" />
                     <ValidationMessage For="() => form.Name" />
                 </label>
 
                 <label class="field">
-                    <span class="field-label">Surname</span>
+                    <span class="field-label">Surname <span class="required" aria-hidden="true">*</span></span>
                     <InputText @bind-Value="form.Surname" />
                     <ValidationMessage For="() => form.Surname" />
                 </label>
@@ -41,7 +42,7 @@
                 @if (group.HasOwnCell())
                 {
                     <label class="field">
-                        <span class="field-label">Cell number</span>
+                        <span class="field-label">Cell number <span class="required" aria-hidden="true">*</span></span>
                         <InputText @bind-Value="form.CellNo" type="tel" />
                         <ValidationMessage For="() => form.CellNo" />
                     </label>
@@ -50,7 +51,7 @@
                 @if (group.HasGrades())
                 {
                     <label class="field">
-                        <span class="field-label">Grade</span>
+                        <span class="field-label">Grade <span class="required" aria-hidden="true">*</span></span>
                         <InputSelect @bind-Value="form.Grade">
                             <option value="">Select a grade…</option>
                             @foreach (var grade in group.Grades())
@@ -63,10 +64,29 @@
                 }
 
                 <label class="field">
-                    <span class="field-label">Date of birth</span>
+                    <span class="field-label">Date of birth <span class="required" aria-hidden="true">*</span></span>
                     <DateField @bind-Value="form.DateOfBirth" />
                     <ValidationMessage For="() => form.DateOfBirth" />
+                    @* Which ministry the date puts them in, as soon as it's typed. *@
+                    @if (group.HasMinistries() && form.DateOfBirth is { } dob && MinistryHint(dob) is { } hint)
+                    {
+                        <p class="field-hint">@hint</p>
+                    }
                 </label>
+
+                @if (group.HasGender())
+                {
+                    <div class="field">
+                        <span class="field-label">Boy or girl <span class="required" aria-hidden="true">*</span></span>
+                        <InputRadioGroup @bind-Value="form.Gender">
+                            <div class="choice-toggle">
+                                <label><InputRadio Value="(Gender?)Gender.Boy" /><span>Boy</span></label>
+                                <label><InputRadio Value="(Gender?)Gender.Girl" /><span>Girl</span></label>
+                            </div>
+                        </InputRadioGroup>
+                        <ValidationMessage For="() => form.Gender" />
+                    </div>
+                }
 
                 @if (group.HasMedical())
                 {
@@ -84,19 +104,19 @@
                 <legend>Parent / guardian details</legend>
 
                 <label class="field">
-                    <span class="field-label">Parent's name</span>
+                    <span class="field-label">Parent's name <span class="required" aria-hidden="true">*</span></span>
                     <InputText @bind-Value="form.ParentName" />
                     <ValidationMessage For="() => form.ParentName" />
                 </label>
 
                 <label class="field">
-                    <span class="field-label">Parent's surname</span>
+                    <span class="field-label">Parent's surname <span class="required" aria-hidden="true">*</span></span>
                     <InputText @bind-Value="form.ParentSurname" />
                     <ValidationMessage For="() => form.ParentSurname" />
                 </label>
 
                 <label class="field">
-                    <span class="field-label">Parent's cell number</span>
+                    <span class="field-label">Parent's cell number <span class="required" aria-hidden="true">*</span></span>
                     <InputText @bind-Value="form.ParentCellNo" type="tel" />
                     <ValidationMessage For="() => form.ParentCellNo" />
                 </label>
@@ -110,7 +130,8 @@
             <fieldset>
                 <legend>Leaders' notes</legend>
 
-                @* Status and Care Village are Youth only; other groups have just the comment. *@
+                @* The status is Youth only, CMR Kids only, Care Village both; every group has the comment.
+                   A child is with CMR or in Care Village, never both: ticking one clears the other. *@
                 @if (group.HasLeaderFlags() && isAdmin)
                 {
                     <label class="field">
@@ -138,12 +159,20 @@
 
                 @* Care Village is its own flag, not a third status: a youth can be
                    flagged red and in Care Village at the same time. *@
-                @if (group.HasLeaderFlags())
+                @if (group.HasCmr())
                 {
                     <label class="checkbox-field">
-                        <InputCheckbox @bind-Value="form.InCareVillage" />
+                        <InputCheckbox @bind-Value="form.InCmr" @bind-Value:after="() => { if (form.InCmr) form.InCareVillage = false; }" />
+                        <span>CMR</span>
+                    </label>
+                }
+                @if (group.HasCareVillage())
+                {
+                    <label class="checkbox-field">
+                        <InputCheckbox @bind-Value="form.InCareVillage" @bind-Value:after="() => { if (form.InCareVillage) form.InCmr = false; }" />
                         <span>Care Village</span>
                     </label>
+                    <ValidationMessage For="() => form.InCmr" />
                 }
 
                 <label class="field">
@@ -301,5 +330,21 @@
             Logger.LogError(ex, "Restoring youth {YouthId} failed", Id);
             Toasts.ShowError("Couldn't restore them. Please try again.");
         }
+    }
+
+    // Kids: the ministry the date of birth puts them in, or when they can join. (A new
+    // child too young to join gets the form's own message instead, on Register.)
+    private string? MinistryHint(DateOnly dob)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (KidsMinistries.IsTooOld(dob, today))
+        {
+            return form.IsNew ? null : $"Past Kids' Ministry: turns {KidsMinistries.AgeThisYear(dob, today)} this year.";
+        }
+        if (KidsMinistries.For(dob, today) is { } ministry)
+        {
+            return $"{ministry.ToDisplayString()} · age {Birthdays.AgeOn(dob, today)}";
+        }
+        return form.IsNew ? null : $"Not in a ministry yet: they can join in {KidsMinistries.JoiningYear(dob)}.";
     }
 }

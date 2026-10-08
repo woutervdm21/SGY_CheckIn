@@ -30,9 +30,9 @@
                     <tr>
                         <th>Time</th>
                         <th>Name</th>
-                        @if (group.HasGrades())
+                        @if (group != Group.YoungAdults)
                         {
-                            <th>Grade</th>
+                            <th>@(group.HasMinistries() ? "Ministry" : "Grade")</th>
                         }
                         <th></th>
                     </tr>
@@ -43,9 +43,9 @@
                         <tr>
                             <td>@FormatLocalTime(c.Timestamp)</td>
                             <td>@c.Youth.FullName</td>
-                            @if (group.HasGrades())
+                            @if (group != Group.YoungAdults)
                             {
-                                <td>@c.Youth.Grade.ToDisplayString()</td>
+                                <td>@group.Describe(c.Youth, DateOnly.FromDateTime(c.Timestamp.ToLocalTime()))</td>
                             }
                             @* Open to volunteers too: whoever checked a youth in is the one
                                most likely to spot a mistake in their details, and they can
@@ -63,7 +63,7 @@
                         @if (confirmingUndoId == c.Id)
                         {
                             <tr class="log-undo-confirm">
-                                <td colspan="@(group.HasGrades() ? 4 : 3)">
+                                <td colspan="@(group != Group.YoungAdults ? 4 : 3)">
                                     <p>Undo @c.Youth.FullName's check-in at @FormatLocalTime(c.Timestamp)? Are you sure?</p>
                                     <div class="archive-confirm-actions">
                                         <button type="button" class="archive-confirm-button" @onclick="() => DoUndo(c)">Yes, undo</button>
